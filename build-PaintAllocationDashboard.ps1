@@ -36,7 +36,7 @@ Build-Exe "PaintAllocationDashboard" "PaintAllocationDashboard\paint_allocation_
 
 # Floor viewers: pipeline-free, stdlib-only (the runlists viewer path never imports pandas /
 # the engine), so no special collection flags — the exes stay tiny.
-Build-Exe "PaintRunlistPC" "PaintAllocationDashboard\runlist_pc.py" @()
-Build-Exe "PaintRunlistEC" "PaintAllocationDashboard\runlist_ec.py" @()
+#Build-Exe "PaintRunlistPC" "PaintAllocationDashboard\runlist_pc.py" @()
+#Build-Exe "PaintRunlistEC" "PaintAllocationDashboard\runlist_ec.py" @()
 
 Write-Host "All Paint dashboard/runlist exes built."
