@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paint Allocation Dashboard — Teenage Engineering Concepts</title>
+<style>
+/* ============================================================
+   2 visual concepts over the SAME dashboard layout + data.
+   Inspired by Teenage Engineering's product design language.
+
+   TE-01 · OP-LAB   — OP-1 inspired. White lab surface, single hot
+                      orange accent, bold grotesque type, physical
+                      "key" buttons, numbered modules, dot indicators.
+   TE-02 · FIELD    — TX-6 / Field inspired. Dark anodized aluminium,
+                      machined panels, monospace, amber LCD readouts,
+                      segmented coverage meters, tiny silkscreen labels.
+
+   Switch via the top bar. Placeholder data; design exploration only.
+   ============================================================ */
+
+/* ---------- base (shared) ---------- */
+:root{
+  --bg:#ececec; --panel:#fff; --panel-2:#f4f4f4; --panel-3:#e9e9e9;
+  --ink:#0a0a0a; --muted:#6a6a6a; --faint:#9a9a9a; --line:#dedede; --line-soft:#ebebeb;
+  --accent:#fe5000; --accent-soft:#fff0e9;
+  --c-past:#1c1c1c; --c-paint:#fe5000; --c-pipe:#9a9a9a; --c-short:#ff2d2d;
+  --t-good:#1c1c1c; --t-low:#fe5000; --t-med:#fe5000; --t-high:#ff2d2d;
+  --radius:6px; --row-pad:9px 11px; --pane-shadow:none;
+  --hd-bg:#0a0a0a; --hd-ink:#fff;
+  --grot:'Helvetica Neue',Helvetica,Arial,'Segoe UI',system-ui,sans-serif;
+  --mono:'Space Mono','Consolas','SFMono-Regular',ui-monospace,monospace;
+  --font:var(--grot); --hd-font:var(--grot);
+  --chip-radius:5px; --weight-strong:700;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:14.5px;-webkit-font-smoothing:antialiased}
+
+/* ---------- concept switcher ---------- */
+#switch{position:sticky;top:0;z-index:60;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  padding:10px 16px;background:#000;color:#fff}
+#switch .t{font-weight:800;margin-right:6px;letter-spacing:-.01em;text-transform:lowercase}
+#switch .t small{font-weight:400;color:#7c7c7c;margin-left:8px;text-transform:none;letter-spacing:0}
+#switch button{border:none;background:#1c1c1c;color:#cfcfcf;padding:8px 16px;border-radius:7px;cursor:pointer;
+  font-size:12px;font-weight:700;font-family:var(--mono);letter-spacing:.02em;
+  box-shadow:0 2px 0 #000;transition:transform .04s}
+#switch button:active{transform:translateY(2px);box-shadow:0 0 0 #000}
+#switch button.on{background:var(--accent);color:#000;box-shadow:0 2px 0 #7a2700}
+#switch .spc{flex:1}
+#desc{padding:11px 16px;background:#111;color:#9a9a9a;font-size:12px;font-family:var(--mono)}
+#desc b{color:#fff}
+
+/* ---------- app shell ---------- */
+header.app{display:flex;align-items:center;gap:14px;padding:11px 16px;background:var(--hd-bg);color:var(--hd-ink);}
+header.app .logo{font-weight:800;font-family:var(--hd-font);letter-spacing:-.015em;text-transform:lowercase;font-size:15px}
+header.app .logo small{font-weight:400;color:var(--muted);margin-left:10px;text-transform:none;font-family:var(--mono)}
+.pulled{font-size:11px;font-family:var(--mono);background:rgba(255,255,255,.08);border-radius:5px;padding:3px 9px;letter-spacing:.02em}
+.spacer{flex:1}.readonly{font-size:10.5px;opacity:.7;font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em}
+.btn{border:none;background:#fff;color:#000;border-radius:7px;padding:7px 15px;cursor:pointer;font-size:12px;
+  font-weight:700;font-family:var(--mono);box-shadow:0 2px 0 rgba(0,0,0,.35);transition:transform .04s}
+.btn:active{transform:translateY(2px);box-shadow:0 0 0}
+.btn.primary{background:var(--accent);color:#000;box-shadow:0 2px 0 #7a2700}
+
+.twopane{display:grid;grid-template-columns:minmax(540px,1.15fr) 1.25fr;gap:14px;padding:14px;height:calc(100vh - 150px);min-height:560px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--pane-shadow)}
+.pane-head{padding:10px 12px;background:var(--panel-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pane-head h3{margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);font-family:var(--mono);font-weight:700;display:flex;align-items:center;gap:9px}
+.pane-head h3::before{content:attr(data-n);background:var(--accent);color:#000;font-size:10px;font-weight:700;
+  border-radius:4px;padding:2px 6px;letter-spacing:.05em}
+.pane-body{overflow:auto;padding:8px;flex:1}
+
+/* ---------- coverage bar ---------- */
+.cov{display:flex;height:8px;width:100%;border-radius:3px;overflow:hidden;background:var(--panel-3);gap:1px}
+.cov.lg{height:14px}
+.cov span{display:block;height:100%}
+.seg-past{background:var(--c-past)} .seg-paint{background:var(--c-paint)}
+.seg-pipe{background:var(--c-pipe)} .seg-short{background:var(--c-short)}
+.cov-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.cov-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* ---------- concern dot ---------- */
+.concern{width:14px;height:14px;border-radius:50%;flex:0 0 auto;display:inline-block;position:relative;border:2px solid currentColor}
+.concern.good{color:var(--t-good);background:transparent}
+.concern.low{color:var(--t-low);background:currentColor}
+.concern.medium{color:var(--t-med);background:currentColor}
+.concern.medium::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#fff}
+.concern.high{color:var(--t-high);background:currentColor;animation:blip 1.1s steps(2) infinite}
+@keyframes blip{50%{opacity:.35}}
+
+/* ---------- paint badge / swatch ---------- */
+.pbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;font-family:var(--mono)}
+.pbadge .ec{background:#000;color:#fff;border-radius:3px;padding:2px 5px;letter-spacing:.03em}
+.swatch{min-width:21px;width:auto;height:17px;padding:0 5px;border-radius:3px;border:1px solid rgba(0,0,0,.3);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;line-height:1;white-space:nowrap;font-family:var(--mono)}
+
+/* ---------- filters ---------- */
+.filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;width:100%}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:var(--chip-radius);padding:5px 11px;font-size:12px;
+  cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-family:var(--mono);text-transform:uppercase;letter-spacing:.03em;font-weight:700;color:var(--muted)}
+.chip.on{background:var(--accent);color:#000;border-color:var(--accent)}
+.chip.neg{background:#000;color:#fff;border-color:#000}
+input.search{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:5px;padding:6px 9px;font-size:12px;min-width:110px;font-family:var(--mono)}
+.drange{flex:1;min-width:60px;accent-color:var(--accent)}
+
+/* ---------- queue rows ---------- */
+.daygroup{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);margin:11px 8px 4px;display:flex;align-items:center;gap:9px;font-weight:700;font-family:var(--mono)}
+.daygroup::after{content:"";flex:1;height:1px;background:var(--line)}
+.qrow{display:grid;grid-template-columns:16px 82px 30px minmax(78px,1fr) 78px 48px 44px 30px;align-items:center;gap:9px;padding:var(--row-pad);border-radius:6px;cursor:pointer;border:1px solid transparent}
+.qrow:hover{background:var(--accent-soft)}
+.qrow.sel{background:var(--accent-soft);border-color:var(--accent)}
+.qrow .cust{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrow .plant{font-family:var(--mono);font-size:12px;color:var(--faint);text-align:center}
+.qrow .pnwrap{display:flex;align-items:center;gap:6px;min-width:0}
+.qrow .pn{font-family:var(--mono);font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+.qrow .date{font-family:var(--mono);color:var(--faint);font-size:12px}
+.qrow .bal{font-weight:800;text-align:right;font-family:var(--mono);font-size:14px}
+/* copy part # button */
+.qcopy{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:5px;width:28px;height:26px;
+  cursor:pointer;font-family:var(--mono);font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;
+  padding:0;line-height:1;transition:transform .04s;box-shadow:0 1px 0 rgba(0,0,0,.12)}
+.qcopy:hover{border-color:var(--accent);color:var(--accent)}
+.qcopy:active{transform:translateY(1px);box-shadow:none}
+.qcopy.done{background:var(--accent);color:#000;border-color:var(--accent)}
+
+/* ---------- detail ---------- */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;background:var(--panel);padding:6px 13px;cursor:pointer;font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.seg button.on{background:var(--accent);color:#000}
+.detailhead{display:flex;align-items:center;gap:11px;padding:11px 8px;flex-wrap:wrap}
+.detailhead .pn{font-family:var(--mono);font-weight:800;font-size:17px;letter-spacing:-.01em}
+.detailhead .meta{color:var(--muted);font-family:var(--mono);font-size:12.5px}
+.oprow{border:1px solid var(--line);border-radius:6px;margin:7px 0;background:var(--panel);overflow:hidden}
+.oprow.up{background:var(--panel-2)}
+.ophead{display:flex;align-items:center;gap:11px;padding:9px 11px;cursor:pointer}
+.ophead .opname{font-weight:700;min-width:120px}
+.ophead .opnet{font-family:var(--mono);color:var(--ink);font-weight:800}
+.ophead .opnet small{color:var(--muted);font-weight:400;text-transform:uppercase;letter-spacing:.05em}
+.ophead.paint{box-shadow:inset 4px 0 0 var(--accent)}
+.tag-paint{font-size:9px;font-weight:700;color:#000;background:var(--accent);border-radius:3px;padding:2px 6px;font-family:var(--mono);letter-spacing:.06em}
+.pie{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--c-past);display:inline-block;flex:0 0 auto}
+.cardstrip{display:flex;gap:7px;overflow-x:auto;padding:5px 9px 10px}
+.ccard{flex:0 0 auto;min-width:120px;border:1px solid var(--line);border-radius:5px;padding:7px 9px;background:var(--panel);border-top:3px solid var(--line);position:relative}
+.ccard.past{border-top-color:var(--c-past)}
+.ccard .sn{font-family:var(--mono);font-size:12.5px;font-weight:700} .ccard .loc{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.ccard .qty{font-weight:800;font-size:14px;margin-top:3px;font-family:var(--mono)}
+.ccard.mrb{background:var(--panel-3);color:var(--faint);border-top-color:var(--line);font-style:italic;display:flex;align-items:center;font-family:var(--mono)}
+.subroute{margin:0 11px 10px 30px;border:1px dashed var(--accent);border-left:3px solid var(--accent);border-radius:6px;background:var(--accent-soft)}
+.subhead{display:flex;align-items:center;gap:9px;padding:8px 11px;font-size:12px}
+.subhead .lbl{font-weight:800;font-family:var(--mono)}
+
+/* ============================================================
+   TE-01 · OP-LAB  (light, OP-1 inspired)
+   ============================================================ */
+body.te-light{
+  --bg:#e7e7e7; --panel:#ffffff; --panel-2:#f3f3f3; --panel-3:#e6e6e6;
+  --ink:#000000; --muted:#454545; --faint:#6f6f6f; --line:#dadada; --line-soft:#eee;
+  --accent:#fe5000; --accent-soft:#fff1ea;
+  --c-past:#111111; --c-paint:#fe5000; --c-pipe:#b4b4b4; --c-short:#ff2d2d;
+  --t-good:#111111; --t-low:#fe5000; --t-med:#fe5000; --t-high:#ff2d2d;
+  --hd-bg:#ffffff; --hd-ink:#0a0a0a;
+}
+body.te-light header.app{border-bottom:2px solid #0a0a0a}
+body.te-light header.app .logo small{color:#9a9a9a}
+body.te-light .pulled{background:#f0f0f0;color:#3a3a3a}
+body.te-light .readonly{color:#9a9a9a}
+body.te-light .btn{box-shadow:0 2px 0 #c9c9c9}
+body.te-light .pane{border-color:#e0e0e0}
+/* OP-1 style colored function keys row on header */
+body.te-light .opkeys{display:inline-flex;gap:6px;align-items:center}
+body.te-light .opkeys i{width:13px;height:13px;border-radius:50%;display:inline-block}
+body.te-light .seg button.on{box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
+
+/* ============================================================
+   TE-02 · FIELD  (dark, TX-6 / anodized aluminium inspired)
+   ============================================================ */
+body.te-field{
+  --bg:#161618; --panel:#202023; --panel-2:#27272b; --panel-3:#2d2d31;
+  --ink:#f4f2ea; --muted:#bdbab0; --faint:#928f85; --line:#3a3a40; --line-soft:#2a2a2e;
+  --accent:#ffb000; --accent-soft:#2a2207;
+  --c-past:#6fae5a; --c-paint:#ffb000; --c-pipe:#5b8fb0; --c-short:#ff5a4d;
+  --t-good:#6fae5a; --t-low:#ffb000; --t-med:#ffb000; --t-high:#ff5a4d;
+  --hd-bg:#0d0d0e; --hd-ink:#e9e7df;
+  --font:var(--mono); --hd-font:var(--mono);
+  --pane-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+/* machined-aluminium texture on dark panels */
+body.te-field{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px)}
+body.te-field header.app{
+  background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.02) 0 1px,transparent 1px 4px);
+  border-bottom:1px solid #000}
+body.te-field header.app .logo{letter-spacing:.04em}
+body.te-field .pulled{background:#000;color:var(--accent);border:1px solid #2a2a2e}
+body.te-field .btn{background:#2d2d31;color:var(--ink);box-shadow:0 2px 0 #000;border:1px solid #3a3a40}
+body.te-field .btn.primary{background:var(--accent);color:#000;border-color:#000}
+body.te-field .pane{border-color:#000;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 1px 3px rgba(0,0,0,.5)}
+body.te-field .pane-head{background:#1a1a1d;border-bottom:1px solid #000;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+body.te-field .pane-head h3{color:var(--muted)}
+body.te-field .pane-head h3::before{color:#000}
+/* LCD-ish coverage meter: dark well + glowing segments */
+body.te-field .cov{background:#0c0c0d;border:1px solid #000;border-radius:2px;gap:1px;padding:1px}
+body.te-field .cov span{box-shadow:0 0 5px currentColor;color:inherit}
+body.te-field .seg-past{box-shadow:0 0 5px var(--c-past)}
+body.te-field .seg-paint{box-shadow:0 0 5px var(--c-paint)}
+body.te-field .seg-pipe{box-shadow:0 0 4px var(--c-pipe)}
+body.te-field .seg-short{box-shadow:0 0 5px var(--c-short)}
+body.te-field .qrow.sel{background:#000;border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+body.te-field .qrow:hover{background:#000}
+body.te-field .bal{color:var(--accent)}
+body.te-field .swatch{border-color:rgba(255,255,255,.25)}
+body.te-field .pbadge .ec{background:var(--ink);color:#000}
+body.te-field .chip{background:#1a1a1d;border-color:#34343a;color:var(--muted)}
+body.te-field .chip.on{background:var(--accent);color:#000}
+body.te-field .chip.neg{background:var(--c-short);border-color:var(--c-short);color:#000}
+body.te-field input.search{background:#0c0c0d;border-color:#000;color:var(--accent)}
+body.te-field .tag-paint{color:#000}
+body.te-field .seg button.on{color:#000}
+body.te-field .ccard{box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+body.te-field .qcopy{background:#1a1a1d;border-color:#3a3a40;color:var(--muted);box-shadow:0 1px 0 #000}
+body.te-field .qcopy:hover{border-color:var(--accent);color:var(--accent)}
+body.te-field .qcopy.done{background:var(--accent);color:#000;border-color:var(--accent)}
+body.te-field .detailhead .pn{color:var(--accent);text-shadow:0 0 8px rgba(255,176,0,.35)}
+</style>
+</head>
+<body class="te-light">
+
+<div id="switch">
+  <span class="t">paint allocation <small>teenage engineering concepts · same layout · placeholder data</small></span>
+  <button data-t="light" class="on">TE-01 · OP-LAB</button>
+  <button data-t="field">TE-02 · FIELD</button>
+  <span class="spc"></span>
+</div>
+<div id="desc"></div>
+
+<header class="app">
+  <span class="logo">paint allocation <small>v / concept</small></span>
+  <span class="opkeys" id="opkeys"></span>
+  <span class="pulled">PULLED 06-01-26 12:25:45</span>
+  <span class="spacer"></span>
+  <span class="readonly">read-only</span>
+  <button class="btn primary">refresh</button>
+</header>
+
+<div class="twopane">
+  <!-- QUEUE -->
+  <div class="pane">
+    <div class="pane-head"><h3 data-n="01">Release Queue</h3><span class="spacer"></span>
+      <span style="font-size:10.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em">sort · ship &uarr;</span></div>
+    <div class="pane-head" style="background:var(--panel)">
+      <div class="filters">
+        <span class="chip">+ customer</span>
+        <span class="chip on" id="ecc">EC</span>
+        <span class="chip neg" id="pcc">not PC</span>
+        <label class="chip"><input type="checkbox" style="margin:0;accent-color:var(--accent)"> hide good</label>
+        <input class="search" placeholder="part #&hellip;">
+      </div>
+    </div>
+    <div class="pane-head" style="background:var(--panel)">
+      <div class="filters" style="flex-wrap:nowrap;align-items:center">
+        <span style="font-size:10.5px;color:var(--muted);font-family:var(--mono)">SHIP</span>
+        <b style="font-family:var(--mono);font-size:11px">04-02</b>
+        <input type="range" class="drange" value="20">
+        <input type="range" class="drange" value="80">
+        <b style="font-family:var(--mono);font-size:11px">06-15</b>
+        <span class="chip">all dates</span>
+      </div>
+    </div>
+    <div class="pane-body" id="queue"></div>
+    <div class="pane-head" style="border-top:1px solid var(--line);border-bottom:none">
+      <div class="cov-legend">
+        <span><i style="background:var(--c-past)"></i>past paint</span>
+        <span><i style="background:var(--c-paint)"></i>paintable</span>
+        <span><i style="background:var(--c-pipe)"></i>pipeline</span>
+        <span><i style="background:var(--c-short)"></i>short</span>
+      </div>
+    </div>
+  </div>
+  <!-- DETAIL -->
+  <div class="pane">
+    <div class="pane-head"><h3 data-n="02">Selected Release</h3><span class="spacer"></span>
+      <div class="seg"><button class="on">&#9636; stack</button><button>&#9655; flow</button></div></div>
+    <div class="detailhead" id="dhead"></div>
+    <div class="pane-body" id="detail"></div>
+  </div>
+</div>
+
+<script>
+const DESCS={
+ light:"<b>TE-01 · OP-LAB</b> — OP-1 language. Bright white lab surface, one hot orange accent doing all the work, bold Helvetica-grotesque type with lowercase chrome, monospaced technical readouts, physical key-style buttons (press them), numbered modules. Minimal, confident, instrument-like.",
+ field:"<b>TE-02 · FIELD</b> — TX-6 / Field language. Dark anodized-aluminium panels with fine machined texture, amber LCD readouts that glow, segmented coverage meters in a recessed well, monospace everything, tiny silkscreen labels. Reads like a piece of hardware on the shop floor — great for a dim line-side monitor."
+};
+const RELEASES=[
+ {c:"Paccar Parts",pl:"P10",pn:"N85-1022",ship:"04-02",bal:120,cov:[20,30,50,20],con:"high",badge:{t:"EC+PC",sw:"Cab Blk",hex:"#1a1a1a",g:"#fff"}},
+ {c:"Paccar Parts",pl:"P6",pn:"T11-1151R",ship:"04-03",bal:60,cov:[30,30,0,0],con:"low",badge:{t:"PC",sw:"Csc Blk",hex:"#202024",g:"#fff"}},
+ {c:"Components Co",pl:"P10",pn:"AXE100517",ship:"04-10",bal:80,cov:[64,16,0,0],con:"low",badge:{t:"EC"}},
+ {c:"Dynacraft",pl:"P10",pn:"A85-6370",ship:"04-12",bal:40,cov:[40,0,0,0],con:"good",badge:{t:"PC",sw:"Ag Grn",hex:"#208e06",g:"#fff"}},
+ {c:"Kenworth Mx",pl:"P10",pn:"F85-1629",ship:"04-14",bal:185,cov:[150,35,0,0],con:"low",badge:{t:"EC+PC",sw:"Ind Chrd",hex:"#3a3f45",g:"#fff"}},
+ {c:"Deere",pl:"P10",pn:"UC48-220",ship:"04-18",bal:95,cov:[10,5,40,40],con:"high",badge:{t:"EC+PC",sw:"JD Grn",hex:"#367c2b",g:"#fff"}},
+ {c:"Praetorian",pl:"P6",pn:"1246-88",ship:"04-20",bal:50,cov:[0,20,30,0],con:"medium",badge:{t:"EC"}},
+ {c:"Cyprium",pl:"P6",pn:"LC24-19",ship:"04-22",bal:500,cov:[500,0,0,0],con:"good",badge:{t:"PC",sw:"Sapph",hex:"#2b4c8c",g:"#fff"}},
+ {c:"Paccar Parts",pl:"P10",pn:"N47-220",ship:"04-25",bal:30,cov:[30,0,0,0],con:"good",badge:{t:"EC"}},
+ {c:"Deere",pl:"P10",pn:"AT457-12",ship:"04-25",bal:18,cov:[2,0,6,10],con:"high",badge:{t:"PC",sw:"?",hex:"#9aa0a8",g:"#222"}},
+];
+const OPS=[
+ {op:"Inspection & Ship - FG",net:15,paint:false,up:false,pp:1,cards:[{sn:"SN-901",loc:"QC-1",a:15,t:15,past:true}]},
+ {op:"PC-Unload - WIP",net:15,paint:true,up:false,pp:1,cards:[{sn:"T771",loc:"PC-O",a:15,t:20,past:true}]},
+ {op:"EC-Unload - WIP",net:15,paint:true,up:false,pp:.5,cards:[{sn:"T925241",loc:"C-PACKR3",a:8,t:105,past:true},{sn:"T651",loc:"EC-O",a:7,t:18,past:false}],
+   sub:{pn:"HXE209761",net:45,con:"medium",cov:[15,20,10,0]}},
+ {op:"EC-Load - WIP",net:15,paint:true,up:false,pp:0,cards:[{sn:"T640",loc:"EC-I",a:15,t:25,past:false}]},
+ {op:"Pressbrake - WIP",net:15,paint:false,up:true,pp:0,cards:[{sn:"T500",loc:"PB-2",a:15,t:60,past:false},{mrb:true,q:12}]},
+ {op:"Laser - WIP",net:15,paint:false,up:true,pp:0,cards:[{sn:"T400",loc:"LS-1",a:15,t:80,past:false}]},
+];
+const $=s=>document.querySelector(s);
+function cov(c,lg){const t=(c[0]+c[1]+c[2]+c[3])||1;return `<div class="cov ${lg?'lg':''}">
+ <span class="seg-past" style="width:${c[0]/t*100}%"></span><span class="seg-paint" style="width:${c[1]/t*100}%"></span>
+ <span class="seg-pipe" style="width:${c[2]/t*100}%"></span><span class="seg-short" style="width:${c[3]/t*100}%"></span></div>`;}
+function concern(t){return `<span class="concern ${t}" title="${t}"></span>`;}
+function badge(b){if(!b)return '';if(b.t==='EC')return `<span class="pbadge"><span class="ec">EC</span></span>`;
+ const sw=`<span class="swatch" style="background:${b.hex};color:${b.g}">${b.sw}</span>`;
+ return b.t==='PC'?`<span class="pbadge">${sw}</span>`:`<span class="pbadge"><span class="ec">EC</span>${sw}</span>`;}
+function pie(s){return `style="${s>=1?'background:var(--c-past)':s<=0?'background:transparent':'background:conic-gradient(var(--c-past) 0 '+Math.round(s*100)+'%,transparent 0)'}"`;}
+
+function renderQueue(){
+ const h=$('#queue');let last=null,html='';
+ RELEASES.forEach((r,i)=>{
+  if(r.ship!==last){html+=`<div class="daygroup">SHIP 2026-${r.ship}</div>`;last=r.ship;}
+  html+=`<div class="qrow ${i===0?'sel':''}" data-i="${i}">${concern(r.con)}
+    <span class="cust" title="${r.c}">${r.c}</span><span class="plant">${r.pl}</span>
+    <span class="pnwrap"><span class="pn">${r.pn}</span>${badge(r.badge)}</span>
+    ${cov(r.cov)}<span class="date">${r.ship}</span><span class="bal">${r.bal}</span>
+    <button class="qcopy" data-pn="${r.pn}" title="copy part #">&#9112;</button></div>`;
+ });
+ h.innerHTML=html;
+ h.querySelectorAll('.qrow').forEach(el=>el.onclick=()=>{h.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');loadDetail(+el.dataset.i);});
+ h.querySelectorAll('.qcopy').forEach(btn=>btn.onclick=e=>{
+  e.stopPropagation();
+  copyText(btn.dataset.pn);
+  btn.classList.add('done');btn.innerHTML='&#10003;';
+  setTimeout(()=>{btn.classList.remove('done');btn.innerHTML='&#9112;';},950);
+ });
+}
+function copyText(t){
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).catch(()=>fallbackCopy(t));}
+ else fallbackCopy(t);
+}
+function fallbackCopy(t){
+ const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;top:0;left:0;opacity:0';
+ document.body.appendChild(ta);ta.focus();ta.select();
+ try{document.execCommand('copy');}catch(e){}
+ document.body.removeChild(ta);
+}
+function loadDetail(i){
+ const r=RELEASES[i];
+ $('#dhead').innerHTML=`${concern(r.con)}<span class="pn">${r.pn}</span>${badge(r.badge)}
+   <span class="meta">${r.c} &middot; ${r.pl} &middot; ship 2026-${r.ship} &middot; <b>BAL ${r.bal}</b></span>
+   <span class="spacer"></span><span style="min-width:150px">${cov(r.cov,true)}</span>`;
+ $('#detail').innerHTML=OPS.map(o=>{
+  const cards=o.cards.map(c=>c.mrb?`<div class="ccard mrb">MRB Qty: ${c.q}</div>`
+    :`<div class="ccard ${c.past?'past':''}"><div class="sn">${c.sn}</div><div class="loc">${c.loc}</div><div class="qty">${c.a}/${c.t}</div></div>`).join('');
+  const sub=o.sub?`<div class="subroute"><div class="subhead"><span class="lbl">${o.sub.pn}</span>
+    <span style="font-family:var(--mono);color:var(--muted)">net ${o.sub.net}</span>
+    <span style="flex:1;max-width:150px">${cov(o.sub.cov)}</span>${concern(o.sub.con)}</div></div>`:'';
+  return `<div class="oprow ${o.up?'up':''}"><div class="ophead ${o.paint?'paint':''}">
+    <span style="color:var(--muted)">&#9662;</span><span class="opname">${o.op}</span>
+    <span class="opnet">${o.net}<small> net</small></span><span class="pie" ${pie(o.pp)}></span>
+    <span class="spacer"></span>${o.paint?'<span class="tag-paint">PAINT</span>':''}</div>
+    <div class="cardstrip">${cards}</div>${sub}</div>`;
+ }).join('');
+}
+// OP-1 style colored function dots in the header (decorative)
+$('#opkeys').innerHTML=['#fe5000','#1c1c1c','#2e9e3a','#3667d6'].map(c=>`<i style="background:${c}"></i>`).join('');
+
+document.querySelectorAll('#switch button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('#switch button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+ document.body.className='te-'+b.dataset.t;$('#desc').innerHTML=DESCS[b.dataset.t];
+});
+$('#desc').innerHTML=DESCS.light;
+renderQueue();loadDetail(0);
+</script>
+</body>
+</html>

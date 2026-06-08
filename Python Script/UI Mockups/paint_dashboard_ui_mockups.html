@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paint Allocation Dashboard — UI Concepts</title>
+<style>
+  /* ============================================================
+     PLACEHOLDER MOCKUP — 5 UI concepts, shared fake data.
+     No backend. Pure layout/visual exploration per design doc.
+     ============================================================ */
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --ink:#1f2430; --muted:#6b7280;
+    --line:#e3e6ec; --accent:#2f6df6; --accent-soft:#e8f0ff;
+    /* coverage buckets */
+    --c-past:#2e7d32;      /* past paint  (solid)  */
+    --c-paint:#f9a825;     /* paintable   (hatched)*/
+    --c-pipe:#1e88e5;      /* pipeline    (dotted) */
+    --c-short:#c62828;     /* short       (hollow) */
+    /* concern tiers */
+    --t-good:#2e7d32; --t-low:#f9a825; --t-med:#ef6c00; --t-high:#c62828;
+    --radius:10px;
+    --mono:'Consolas','SFMono-Regular',ui-monospace,monospace;
+    --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:13px}
+
+  /* ---------- top concept switcher ---------- */
+  #switcher{
+    position:sticky;top:0;z-index:50;display:flex;gap:6px;align-items:center;
+    padding:8px 14px;background:#11151c;color:#fff;flex-wrap:wrap;
+    box-shadow:0 2px 10px rgba(0,0,0,.25)
+  }
+  #switcher .title{font-weight:600;margin-right:10px}
+  #switcher .title small{font-weight:400;color:#9aa3b2;margin-left:6px}
+  #switcher button{
+    border:1px solid #2a3140;background:#1b2230;color:#cfd6e4;
+    padding:6px 12px;border-radius:20px;cursor:pointer;font-size:12.5px
+  }
+  #switcher button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  #switcher .spacer{flex:1}
+  #switcher .hint{font-size:11.5px;color:#9aa3b2}
+
+  .concept{display:none;padding:14px}
+  .concept.active{display:block}
+  .concept > h2{margin:0 0 4px;font-size:15px}
+  .concept > p.desc{margin:0 0 14px;color:var(--muted);max-width:90ch}
+
+  /* ---------- shared two-pane shell ---------- */
+  .twopane{display:grid;grid-template-columns:minmax(420px,1fr) 1.4fr;gap:14px;height:calc(100vh - 190px);min-height:520px}
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden}
+  .pane-head{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pane-head h3{margin:0;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .pane-body{overflow:auto;padding:8px;flex:1}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:12px}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .spacer{flex:1}
+
+  /* ---------- coverage bar ---------- */
+  .cov{display:flex;height:9px;width:100%;border-radius:5px;overflow:hidden;background:#eceff3;border:1px solid #dce0e7}
+  .cov.lg{height:13px}
+  .cov span{display:block;height:100%}
+  .seg-past {background:var(--c-past)}
+  .seg-paint{background:repeating-linear-gradient(45deg,var(--c-paint),var(--c-paint) 3px,#fff5d6 3px,#fff5d6 6px)}
+  .seg-pipe {background:radial-gradient(circle,var(--c-pipe) 1px,transparent 1.4px);background-color:#d7e9fb;background-size:5px 5px}
+  .seg-short{background:repeating-linear-gradient(45deg,#fff,#fff 4px,#f3c9c9 4px,#f3c9c9 5px)}
+  .cov-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+  .cov-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid #ccc}
+
+  /* ---------- concern badge (shape-coded, color layered) ---------- */
+  .concern{width:18px;height:18px;border-radius:50%;flex:0 0 auto;display:inline-block;position:relative;border:2px solid currentColor}
+  .concern.good{color:var(--t-good);background:radial-gradient(circle,transparent 55%,currentColor 0)}
+  .concern.low {color:var(--t-low)}
+  .concern.low::after,.concern.med::after{content:"";position:absolute;inset:1px;border-radius:50%;background:currentColor;clip-path:inset(0 50% 0 0)}
+  .concern.med {color:var(--t-med)}
+  .concern.med::after{clip-path:inset(0 0 0 0);background:radial-gradient(circle at right,currentColor 70%,transparent 0)}
+  .concern.high{color:var(--t-high);background:currentColor}
+  .concern.good{background:currentColor}     /* full filled ● */
+  .concern.low{background:linear-gradient(90deg,currentColor 50%,#fff 50%)} /* half ◑ */
+  .concern.med{background:conic-gradient(currentColor 0 75%, #fff 0)}        /* mostly */
+  .concern.high{background:currentColor}
+
+  /* ---------- paint badge w/ swatch ---------- */
+  .pbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600}
+  .pbadge .ec{background:#e7f0ff;color:#1554c0;border:1px solid #bcd2f7;border-radius:4px;padding:1px 5px}
+  .swatch{width:20px;height:16px;border-radius:3px;border:1px solid rgba(0,0,0,.25);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1}
+
+  /* ---------- pie past-paint chip ---------- */
+  .pie{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--c-past);display:inline-block;flex:0 0 auto}
+  .pie.full{background:var(--c-past)}
+  .pie.none{background:#fff}
+  .pie.half{background:conic-gradient(var(--c-past) 0 50%, #fff 0)}
+  .pie.q3{background:conic-gradient(var(--c-past) 0 72%, #fff 0)}
+
+  /* ---------- container card ---------- */
+  .cardstrip{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 8px;align-items:stretch}
+  .ccard{flex:0 0 auto;min-width:118px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;cursor:pointer;border-left:4px solid #cfd4dc;position:relative}
+  .ccard.past{border-left-color:var(--c-past)}
+  .ccard .sn{font-family:var(--mono);font-size:11px;color:var(--ink)}
+  .ccard .loc{font-size:10.5px;color:var(--muted)}
+  .ccard .qty{font-weight:700;font-size:13px;margin-top:2px}
+  .ccard.mrb{background:#f0f0f2;color:#888;border-left-color:#bbb;font-style:italic}
+  .ccard .corner{position:absolute;top:5px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--c-past)}
+  .ccard:not(.past) .corner{display:none}
+
+  /* ---------- op row (detail) ---------- */
+  .oprow{border:1px solid var(--line);border-radius:9px;margin:6px 0;background:#fff;overflow:hidden}
+  .oprow.collapsed .cardstrip{display:none}
+  .ophead{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer}
+  .ophead .opname{font-weight:600;min-width:120px}
+  .ophead .opnet{font-family:var(--mono);color:var(--accent);font-weight:700}
+  .ophead .opnet small{color:var(--muted);font-weight:400}
+  .ophead .caret{color:var(--muted);transition:transform .15s}
+  .oprow.collapsed .caret{transform:rotate(-90deg)}
+  .ophead.paint{background:linear-gradient(0deg,#fff,#fffaf0)}
+  .subroute{margin:6px 10px 10px 28px;border:1px dashed #c7cdd8;border-left:3px solid var(--accent);border-radius:9px;background:#fafbff}
+  .subhead{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;font-size:12px}
+  .subhead .lbl{font-weight:700}
+  .subhead .xq{font-family:var(--mono);color:var(--muted)}
+
+  /* ---------- queue rows (concept-specific styles below) ---------- */
+  .qrow{display:grid;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+  .qrow:hover{background:var(--accent-soft)}
+  .qrow.sel{background:var(--accent-soft);border-color:#bcd2f7}
+  .qrow .cust{color:var(--muted)}
+  .qrow .pn{font-family:var(--mono);font-weight:700}
+  .qrow .date{font-family:var(--mono);color:var(--muted)}
+  .qrow .bal{font-weight:700;text-align:right}
+
+  .filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:16px;padding:3px 9px;font-size:11.5px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .chip .x{opacity:.7}
+  input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;min-width:120px}
+
+  /* ====== Concept 2: Dense grid ====== */
+  .grid2 .qrow{grid-template-columns:18px 90px 1fr 70px 60px 46px 110px;border-radius:0;border-bottom:1px solid var(--line);padding:4px 8px;font-size:12px}
+  .grid2 .qrow:hover{background:#eef6ff}
+  .grid2 .cov{height:7px}
+  .grid2 .hdrrow{grid-template-columns:18px 90px 1fr 70px 60px 46px 110px;display:grid;gap:8px;padding:6px 8px;font-size:10.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.04em;border-bottom:2px solid var(--line);position:sticky;top:0;background:#fafbfd}
+  .grid2 .pane-body{padding:0}
+  .grid2 .oprow{border-radius:0;border-left:none;border-right:none;margin:0;border-top:none}
+
+  /* ====== Concept 3: Roomy cards ====== */
+  .cards3 .qcard{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 4px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .cards3 .qcard:hover{border-color:#bcd2f7;box-shadow:0 4px 14px rgba(47,109,246,.12)}
+  .cards3 .qcard.sel{border-color:var(--accent)}
+  .cards3 .qcard .top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .cards3 .qcard .pn{font-family:var(--mono);font-weight:700;font-size:14px}
+  .cards3 .qcard .meta{color:var(--muted);font-size:12px}
+  .cards3 .grouphdr{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:14px 6px 4px;display:flex;align-items:center;gap:8px}
+  .cards3 .grouphdr::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  /* ====== Concept 4: Control room (dark) ====== */
+  .dark4{--bg:#0e1117;--panel:#161b24;--ink:#e6e9ef;--muted:#8a93a3;--line:#252c39;--accent:#4d8bff;--accent-soft:#1a2333;background:#0e1117;border-radius:12px;padding:12px;color:var(--ink)}
+  .dark4 .pane{background:#161b24;border-color:#252c39}
+  .dark4 .pane-head{border-color:#252c39}
+  .dark4 .btn{background:#1d2430;border-color:#2c3442;color:#cdd4e0}
+  .dark4 .ccard{background:#1b2230;border-color:#2a3140;color:#e6e9ef;border-left-color:#3a4254}
+  .dark4 .ccard.past{border-left-color:#39d353}
+  .dark4 .ccard.mrb{background:#181c24;color:#5e6675}
+  .dark4 .oprow{background:#161b24;border-color:#252c39}
+  .dark4 .ophead.paint{background:linear-gradient(0deg,#161b24,#1d2233)}
+  .dark4 .cov{background:#0c0f15;border-color:#2a3140}
+  .dark4 .qrow:hover{background:#1a2333}
+  .dark4 .qrow.sel{background:#1a2333;border-color:#33415c}
+  .dark4 .chip{background:#1d2430;border-color:#2c3442;color:#cdd4e0}
+  .dark4 .seg-short{background:repeating-linear-gradient(45deg,#161b24,#161b24 4px,#5a2a2a 4px,#5a2a2a 5px)}
+  .dark4 input.search{background:#1d2430;border-color:#2c3442;color:#e6e9ef}
+  .dark4 .qrow{grid-template-columns:18px 1fr 80px 56px;font-family:var(--mono)}
+
+  /* ====== Concept 5: Horizontal flow ====== */
+  .flow5 .flowwrap{overflow-x:auto;padding:10px 4px}
+  .flow5 .flowline{display:flex;align-items:stretch;gap:0;min-width:max-content}
+  .flow5 .fstage{min-width:150px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px;position:relative;margin-right:34px}
+  .flow5 .fstage::after{content:"▶";position:absolute;right:-26px;top:50%;transform:translateY(-50%);color:#c7cdd8}
+  .flow5 .fstage:last-child{margin-right:0}
+  .flow5 .fstage:last-child::after{display:none}
+  .flow5 .fstage.paint{border-color:#f0c060;background:#fffaf0}
+  .flow5 .fstage .fname{font-weight:700;font-size:12px;margin-bottom:2px}
+  .flow5 .fstage .fnet{font-family:var(--mono);color:var(--accent);font-size:11px;margin-bottom:6px}
+  .flow5 .fmini{height:24px;border-radius:5px;border:1px solid var(--line);margin:3px 0;display:flex;align-items:center;padding:0 6px;font-size:10.5px;font-family:var(--mono);background:#fff}
+  .flow5 .fmini.past{border-left:4px solid var(--c-past)}
+  .flow5 .fmini.mrb{background:#f0f0f2;color:#999}
+  .flow5 .fbranch{margin-top:8px;border-top:1px dashed #c7cdd8;padding-top:6px}
+  .flow5 .fbranch .bl{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:4px}
+  .flow5 .qrow{grid-template-columns:18px 1fr 60px}
+
+  /* popover */
+  #pop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:100}
+  #pop.show{display:flex}
+  #pop .box{background:#fff;border-radius:12px;padding:16px 18px;min-width:300px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  #pop h4{margin:0 0 10px}
+  #pop .frow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+  #pop .frow b{font-family:var(--mono)}
+  .note{font-size:11px;color:var(--muted);margin-top:6px}
+  .banner{background:#fff7e6;border:1px solid #ffd98a;color:#7a5b00;padding:6px 10px;border-radius:8px;font-size:12px;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div id="switcher">
+  <span class="title">Paint Allocation Dashboard <small>5 UI concepts · placeholder data</small></span>
+  <button data-c="1" class="active">1 · Classic two-pane</button>
+  <button data-c="2">2 · Dense grid</button>
+  <button data-c="3">3 · Roomy cards</button>
+  <button data-c="4">4 · Control room (dark)</button>
+  <button data-c="5">5 · Horizontal flow</button>
+  <span class="spacer"></span>
+  <span class="hint">Click rows, ops, cards & chips — all live in-page.</span>
+</div>
+
+<!-- ============ CONCEPT 1 — CLASSIC ============ -->
+<section class="concept active" id="c1">
+  <h2>Concept 1 — Classic two-pane</h2>
+  <p class="desc">Faithful to your mockup. Light, calm, list-based. Queue rows carry the coverage bar inline; detail pane is a vertical op stack (final op on top) with horizontally-scrolling card strips and inline collapsible sub-routings. Lowest-risk, fastest to build.</p>
+  <div class="twopane">
+    <div class="pane">
+      <div class="pane-head">
+        <h3>Release Queue</h3><span class="spacer"></span>
+        <button class="btn">Refresh data</button>
+      </div>
+      <div class="pane-head" style="border-top:none">
+        <div class="filters">
+          <span class="chip on">ACME <span class="x">×</span></span>
+          <span class="chip">+ Customer</span>
+          <span class="chip">Concern ▾</span>
+          <label class="chip"><input type="checkbox" checked> hide good</label>
+          <input class="search" placeholder="part #…">
+        </div>
+      </div>
+      <div class="pane-body" id="queue1"></div>
+      <div class="pane-head" style="border-top:1px solid var(--line);border-bottom:none">
+        <div class="cov-legend">
+          <span><i style="background:var(--c-past)"></i>past paint</span>
+          <span><i class="seg-paint"></i>paintable</span>
+          <span><i class="seg-pipe"></i>pipeline</span>
+          <span><i class="seg-short"></i>short</span>
+        </div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">
+        <h3>Selected Release</h3>
+        <span class="spacer"></span>
+        <span style="font-family:var(--mono)">PN-1234 · ACME · ship 07-04 · <b>Net 120</b></span>
+      </div>
+      <div class="pane-body" id="detail1"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONCEPT 2 — DENSE GRID ============ -->
+<section class="concept" id="c2">
+  <h2>Concept 2 — Dense data grid</h2>
+  <p class="desc">For Excel power-users. Maximum rows on screen, monospace, tight column grid with a sticky header — feels like the spreadsheet it replaces but with live coverage bars and shape-coded concern. Detail pane mirrors the density.</p>
+  <div class="twopane grid2">
+    <div class="pane">
+      <div class="pane-head">
+        <h3>Release Queue</h3><span class="spacer"></span>
+        <input class="search" placeholder="filter…"><button class="btn">Refresh</button>
+      </div>
+      <div class="pane-body">
+        <div class="hdrrow"><span></span><span>Cust</span><span>Part / coverage</span><span>Paint</span><span>Ship</span><span>Bal</span><span>Concern</span></div>
+        <div id="queue2"></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="pane-head"><h3>Selected · PN-1234</h3><span class="spacer"></span><span style="font-family:var(--mono)">Net 120</span></div>
+      <div class="pane-body" id="detail2"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONCEPT 3 — ROOMY CARDS ============ -->
+<section class="concept" id="c3">
+  <h2>Concept 3 — Roomy concern-grouped cards</h2>
+  <p class="desc">Queue as breathable cards grouped by concern tier (high → good), so the releases that need attention float to the top regardless of ship date. Big coverage bars. Best for a glanceable "what's on fire" read; trades density for clarity.</p>
+  <div class="twopane cards3">
+    <div class="pane">
+      <div class="pane-head"><h3>Release Queue</h3><span class="spacer"></span>
+        <span class="chip on">group: concern</span><button class="btn">Refresh</button></div>
+      <div class="pane-body" id="queue3"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-head"><h3>Selected Release</h3><span class="spacer"></span>
+        <span style="font-family:var(--mono)">PN-1234 · Net 120</span></div>
+      <div class="pane-body" id="detail3"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONCEPT 4 — CONTROL ROOM ============ -->
+<section class="concept" id="c4">
+  <h2>Concept 4 — Control room (dark)</h2>
+  <p class="desc">Dark, high-contrast, monospace — built to live on a wall monitor on the shop floor. Coverage bars and past-paint dots pop against the dark panel. Same two-pane logic, tuned for ambient at-a-glance monitoring rather than deep editing.</p>
+  <div class="twopane dark4">
+    <div class="pane">
+      <div class="pane-head"><h3>Release Queue</h3><span class="spacer"></span>
+        <span class="chip">2 planners active</span><button class="btn">Refresh</button></div>
+      <div class="pane-body" id="queue4"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-head"><h3>Selected · PN-1234</h3><span class="spacer"></span>
+        <span style="font-family:var(--mono)">Net 120</span></div>
+      <div class="pane-body" id="detail4"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONCEPT 5 — HORIZONTAL FLOW ============ -->
+<section class="concept" id="c5">
+  <h2>Concept 5 — Horizontal process flow</h2>
+  <p class="desc">Detail pane renders the routing left-to-right as a connected flow (raw → … → final op), matching how the shop physically thinks about the line. Painted sub-components branch downward from their consuming stage. Queue shrinks to a slim picker on the left.</p>
+  <div class="twopane flow5" style="grid-template-columns:340px 1fr">
+    <div class="pane">
+      <div class="pane-head"><h3>Releases</h3><span class="spacer"></span><button class="btn">Refresh</button></div>
+      <div class="pane-body" id="queue5"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-head"><h3>Flow · PN-1234 · ACME · Net 120</h3></div>
+      <div class="pane-body"><div class="flowwrap"><div class="flowline" id="detail5"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- shared popover -->
+<div id="pop"><div class="box">
+  <h4>Container detail</h4>
+  <div class="frow"><span>Serial</span><b>SN-00482</b></div>
+  <div class="frow"><span>Location</span><b>WIP-A12</b></div>
+  <div class="frow"><span>Alloc Qty</span><b>12</b></div>
+  <div class="frow"><span>Container Qty</span><b>40</b></div>
+  <div class="frow"><span>Add Date</span><b>2026-05-20</b></div>
+  <div class="frow"><span>Inventory Plant</span><b>P10</b></div>
+  <div class="frow"><span>Next Op</span><b>EC-Load</b></div>
+  <div class="note">Read-only · Esc or click outside to close</div>
+</div></div>
+
+<script>
+/* ---------------- shared placeholder data ---------------- */
+const swatches = {Granite:"#5a5e63", Sandstone:"#cbb38a", Sapphire:"#2b4c8c", Ember:"#b5462b"};
+function glyphColor(hex){const n=parseInt(hex.slice(1),16);const l=0.299*(n>>16)+0.587*((n>>8)&255)+0.114*(n&255);return l>140?"#222":"#fff";}
+
+const RELEASES = [
+  {pn:"PN-1234",cust:"ACME",ship:"07-04",bal:120,cov:[20,30,50,20], concern:"high", paint:{type:"EC+PC",col:"Granite",init:"GS"}},
+  {pn:"PN-5678",cust:"Borg Ind",ship:"07-05",bal:60,cov:[30,30,0,0], concern:"low", paint:{type:"PC",col:"Sapphire",init:"SP"}},
+  {pn:"PN-9876",cust:"Cit Corp",ship:"07-06",bal:80,cov:[64,16,0,0], concern:"low", paint:{type:"EC"}},
+  {pn:"PN-5555",cust:"ACME",ship:"07-08",bal:40,cov:[40,0,0,0], concern:"good", paint:{type:"PC",col:"Ember",init:"EM"}},
+  {pn:"PN-3344",cust:"Delta LLC",ship:"07-09",bal:95,cov:[10,5,40,40], concern:"high", paint:{type:"EC+PC",col:"Sandstone",init:"SA"}},
+  {pn:"PN-7788",cust:"Borg Ind",ship:"07-10",bal:50,cov:[0,20,30,0], concern:"medium", paint:{type:"EC"}},
+  {pn:"PN-2200",cust:"Cit Corp",ship:"07-11",bal:30,cov:[30,0,0,0], concern:"good", paint:{type:"PC",col:"Sapphire",init:"SP"}},
+];
+
+// detail op stack for PN-1234 (final op first)
+const OPS = [
+  {op:"Inspect",  net:15, paint:false, pp:1.0, cards:[{sn:"SN-901",loc:"QC-1",a:15,t:15,past:true}]},
+  {op:"Assy",     net:15, paint:false, pp:1.0, cards:[{sn:"SN-880",loc:"AS-3",a:15,t:30,past:true}]},
+  {op:"PC-Unload",net:15, paint:true,  pp:1.0, cards:[{sn:"SN-771",loc:"PC-O",a:15,t:20,past:true}], sub:null},
+  {op:"PC-Load",  net:15, paint:true,  pp:0.0, cards:[{sn:"SN-770",loc:"PC-I",a:15,t:20,past:false}]},
+  {op:"EC-Unload",net:15, paint:true,  pp:0.5, cards:[{sn:"SN-650",loc:"EC-O",a:8,t:20,past:true},{sn:"SN-651",loc:"EC-O",a:7,t:18,past:false}],
+     sub:{pn:"PN-1234-SUB",xq:"×1",net:45,concern:"medium",paint:{type:"EC",}}},
+  {op:"EC-Load",  net:15, paint:true,  pp:0.0, cards:[{sn:"SN-640",loc:"EC-I",a:15,t:25,past:false}]},
+  {op:"PB",       net:15, paint:false, pp:0.0, collapsed:true, cards:[{sn:"SN-500",loc:"PB-2",a:15,t:60,past:false}]},
+  {op:"Laser",    net:15, paint:false, pp:0.0, collapsed:true, cards:[{sn:"SN-400",loc:"LS-1",a:15,t:80,past:false},{mrb:true,q:12}]},
+];
+
+/* ---------------- builders ---------------- */
+function covBar(c,lg){const t=c.reduce((a,b)=>a+b,0)||1;
+  return `<div class="cov ${lg?'lg':''}">
+   <span class="seg-past"  style="width:${c[0]/t*100}%"></span>
+   <span class="seg-paint" style="width:${c[1]/t*100}%"></span>
+   <span class="seg-pipe"  style="width:${c[2]/t*100}%"></span>
+   <span class="seg-short" style="width:${c[3]/t*100}%"></span></div>`;}
+
+function concernEl(t){return `<span class="concern ${t}" title="concern: ${t}"></span>`;}
+
+function paintBadge(p){
+  if(p.type==="EC") return `<span class="pbadge"><span class="ec">EC</span></span>`;
+  const hex=swatches[p.col]||"#888", g=glyphColor(hex);
+  const sw=`<span class="swatch" style="background:${hex};color:${g}">${p.init||"?"}</span>`;
+  if(p.type==="PC") return `<span class="pbadge">${sw}</span>`;
+  return `<span class="pbadge"><span class="ec">EC</span>${sw}</span>`; // EC+PC
+}
+
+function pieClass(pp){if(pp>=1)return"full";if(pp<=0)return"none";if(pp>=0.7)return"q3";return"half";}
+
+function opDetailHTML(forceCollapseSub){
+  return OPS.map((o,i)=>{
+    const cards = o.cards.map(c=>{
+      if(c.mrb) return `<div class="ccard mrb">MRB Qty: ${c.q}</div>`;
+      return `<div class="ccard ${c.past?'past':''}" onclick="showPop(event)">
+        <span class="corner"></span>
+        <div class="sn">${c.sn}</div><div class="loc">${c.loc}</div>
+        <div class="qty">${c.a}/${c.t}</div></div>`;
+    }).join("");
+    const sub = o.sub ? `<div class="subroute">
+        <div class="subhead" onclick="this.parentNode.classList.toggle('open')">
+          <span class="caret">▾</span><span class="lbl">${o.sub.pn}</span>
+          <span class="xq">${o.sub.xq}</span> ${paintBadge(o.sub.paint)}
+          <span style="flex:1;max-width:160px">${covBar([15,20,10,0])}</span>
+          ${concernEl(o.sub.concern)}
+        </div></div>` : "";
+    return `<div class="oprow ${o.collapsed?'collapsed':''}">
+      <div class="ophead ${o.paint?'paint':''}" onclick="this.parentNode.classList.toggle('collapsed')">
+        <span class="caret">▾</span>
+        <span class="opname">${o.op}</span>
+        <span class="opnet">${o.net}<small> net</small></span>
+        ${o.collapsed?`<span class="pie ${pieClass(o.pp)}"></span>`:''}
+        <span class="spacer"></span>
+        ${o.paint?'<span style="font-size:10px;color:#b8860b">PAINT</span>':''}
+      </div>
+      <div class="cardstrip">${cards}</div>
+      ${sub}</div>`;
+  }).join("");
+}
+
+function flowHTML(){
+  // reverse so raw->final left to right
+  const stages=[...OPS].reverse();
+  return stages.map(o=>{
+    const minis=o.cards.map(c=>c.mrb?`<div class="fmini mrb">MRB ${c.q}</div>`
+      :`<div class="fmini ${c.past?'past':''}" onclick="showPop(event)">${c.sn} · ${c.a}/${c.t}</div>`).join("");
+    const branch=o.sub?`<div class="fbranch"><div class="bl">↳ ${o.sub.pn} ${o.sub.xq}</div>
+        ${covBar([15,20,10,0])}</div>`:"";
+    return `<div class="fstage ${o.paint?'paint':''}">
+      <div class="fname">${o.op} ${o.paint?'🎨':''}</div>
+      <div class="fnet">net ${o.net}</div>${minis}${branch}</div>`;
+  }).join("");
+}
+
+/* ---------------- queue renderers per concept ---------------- */
+function rowClassic(r,host){
+  const div=document.createElement('div');div.className='qrow';
+  div.style.gridTemplateColumns='18px 90px 1fr auto 60px 50px';
+  div.innerHTML=`${concernEl(r.concern)}
+    <span class="cust">${r.cust}</span>
+    <span class="pn">${r.pn}</span>
+    <span style="min-width:120px">${covBar(r.cov)}</span>
+    <span class="date">${r.ship}</span>
+    <span class="bal">${r.bal}</span>`;
+  // add paint badge under pn line via title row — simpler: prepend
+  div.querySelector('.pn').insertAdjacentHTML('afterend',`<span style="margin-left:6px">${paintBadge(r.paint)}</span>`);
+  div.onclick=()=>{host.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));div.classList.add('sel');};
+  return div;
+}
+function buildQueue1(){const h=document.getElementById('queue1');RELEASES.forEach((r,i)=>{const el=rowClassic(r,h);if(i===0)el.classList.add('sel');h.appendChild(el);});}
+
+function buildQueue2(){const h=document.getElementById('queue2');
+  RELEASES.forEach((r,i)=>{const d=document.createElement('div');d.className='qrow';
+    d.innerHTML=`${concernEl(r.concern)}<span class="cust">${r.cust}</span>
+      <span><span class="pn">${r.pn}</span> ${covBar(r.cov)}</span>
+      ${paintBadge(r.paint)}<span class="date">${r.ship}</span>
+      <span class="bal">${r.bal}</span>
+      <span style="font-size:10px;color:var(--muted)">${r.concern}</span>`;
+    if(i===0)d.classList.add('sel');
+    d.onclick=()=>{h.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};
+    h.appendChild(d);});}
+
+function buildQueue3(){const h=document.getElementById('queue3');
+  const order=['high','medium','low','good'];const labels={high:'High concern',medium:'Medium',low:'Low',good:'Good — covered'};
+  order.forEach(tier=>{const items=RELEASES.filter(r=>r.concern===tier);if(!items.length)return;
+    const g=document.createElement('div');g.className='grouphdr';g.innerHTML=`${concernEl(tier)} ${labels[tier]} <span style="color:#aaa">(${items.length})</span>`;h.appendChild(g);
+    items.forEach(r=>{const c=document.createElement('div');c.className='qcard';
+      c.innerHTML=`<div class="top">${concernEl(r.concern)}<span class="pn">${r.pn}</span>${paintBadge(r.paint)}
+        <span class="spacer" style="flex:1"></span><span class="meta">${r.cust} · ship ${r.ship}</span></div>
+        ${covBar(r.cov,true)}
+        <div class="meta" style="margin-top:6px">Rel Bal <b>${r.bal}</b> · past ${r.cov[0]} · paintable ${r.cov[1]} · pipeline ${r.cov[2]} · short ${r.cov[3]}</div>`;
+      c.onclick=()=>{h.querySelectorAll('.qcard').forEach(x=>x.classList.remove('sel'));c.classList.add('sel');};
+      h.appendChild(c);});});}
+
+function buildQueue4(){const h=document.getElementById('queue4');
+  RELEASES.forEach((r,i)=>{const d=document.createElement('div');d.className='qrow';
+    d.innerHTML=`${concernEl(r.concern)}<span><span class="pn">${r.pn}</span> <span class="cust">${r.cust}</span><br>${covBar(r.cov)}</span>
+      <span class="date">${r.ship}</span><span class="bal">${r.bal}</span>`;
+    if(i===0)d.classList.add('sel');
+    d.onclick=()=>{h.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};
+    h.appendChild(d);});}
+
+function buildQueue5(){const h=document.getElementById('queue5');
+  RELEASES.forEach((r,i)=>{const d=document.createElement('div');d.className='qrow';
+    d.innerHTML=`${concernEl(r.concern)}<span><span class="pn">${r.pn}</span><br><span class="cust" style="font-size:11px">${r.cust} · ${r.ship}</span></span><span class="bal">${r.bal}</span>`;
+    if(i===0)d.classList.add('sel');
+    d.onclick=()=>{h.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};
+    h.appendChild(d);});}
+
+/* ---------------- popover ---------------- */
+function showPop(e){e.stopPropagation();document.getElementById('pop').classList.add('show');}
+document.getElementById('pop').onclick=e=>{if(e.target.id==='pop')e.currentTarget.classList.remove('show');};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('pop').classList.remove('show');});
+
+/* ---------------- concept switcher ---------------- */
+document.querySelectorAll('#switcher button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#switcher button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.concept').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');document.getElementById('c'+b.dataset.c).classList.add('active');
+});
+
+/* ---------------- init ---------------- */
+buildQueue1();buildQueue2();buildQueue3();buildQueue4();buildQueue5();
+document.getElementById('detail1').innerHTML=opDetailHTML();
+document.getElementById('detail2').innerHTML=opDetailHTML();
+document.getElementById('detail3').innerHTML='<div class="banner">2 planners active · 1 override changed in the last hour</div>'+opDetailHTML();
+document.getElementById('detail4').innerHTML=opDetailHTML();
+document.getElementById('detail5').innerHTML=flowHTML();
+</script>
+</body>
+</html>

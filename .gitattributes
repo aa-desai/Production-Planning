@@ -1,0 +1,2 @@
+# Normalize line endings on commit; leave working-tree EOL to the OS.
+* text=auto

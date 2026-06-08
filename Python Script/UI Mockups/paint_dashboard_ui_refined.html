@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paint Allocation Dashboard — Refined (Classic + Flow)</title>
+<style>
+  /* ============================================================
+     REFINED MOCKUP — blend of Concept 1 (Classic queue + stack)
+     and Concept 5 (horizontal flow detail). Heather-gray light theme.
+     Queue sorts strictly by ship-date ASC. Placeholder data, no backend.
+     ============================================================ */
+  :root{
+    /* heather-gray light theme (a touch darker than pure white, not charcoal) */
+    --bg:#c7cad2;            /* app background — heather gray */
+    --panel:#fbfbfc;         /* pane surface */
+    --panel-2:#eceef3;       /* sub-surface / heads */
+    --panel-3:#e3e6ec;       /* upstream/collapsed tint */
+    --ink:#1f2430; --muted:#646b78; --faint:#8a909c;
+    --line:#cfd3db; --line-soft:#dde0e7;
+    --accent:#3667d6; --accent-soft:#e7eeff;
+    --c-past:#2e7d32; --c-paint:#f4a615; --c-pipe:#1e7fd6; --c-short:#c62828;
+    --t-good:#2e7d32; --t-low:#f4a615; --t-med:#e67e00; --t-high:#c62828;
+    --radius:10px;
+    --mono:'Consolas','SFMono-Regular',ui-monospace,monospace;
+    --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:13px}
+
+  header.app{display:flex;align-items:center;gap:12px;padding:9px 16px;background:#aeb2bd;
+    border-bottom:1px solid #9a9fac;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+  header.app .logo{font-weight:700;letter-spacing:.02em}
+  header.app .logo small{font-weight:400;color:#3d4250;margin-left:8px}
+  header.app .spacer{flex:1}
+  header.app .stat{font-size:11.5px;color:#3d4250}
+
+  .twopane{display:grid;grid-template-columns:minmax(430px,1fr) 1.55fr;gap:12px;padding:12px;height:calc(100vh - 50px)}
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .pane-head{padding:9px 12px;background:var(--panel-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pane-head h3{margin:0;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .pane-body{overflow:auto;padding:8px;flex:1}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:12px}
+  .btn:hover{background:var(--panel-2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* segmented view toggle */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:none;background:#fff;padding:5px 12px;cursor:pointer;font-size:12px;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:#fff}
+
+  /* coverage bar */
+  .cov{display:flex;height:9px;width:100%;border-radius:5px;overflow:hidden;background:#dfe2e9;border:1px solid #cdd1da}
+  .cov.lg{height:12px}
+  .cov span{display:block;height:100%}
+  .seg-past {background:var(--c-past)}
+  .seg-paint{background:repeating-linear-gradient(45deg,var(--c-paint),var(--c-paint) 3px,#fde9bf 3px,#fde9bf 6px)}
+  .seg-pipe {background-color:#cfe3f7;background-image:radial-gradient(circle,var(--c-pipe) 1px,transparent 1.4px);background-size:5px 5px}
+  .seg-short{background:repeating-linear-gradient(45deg,#fff,#fff 4px,#eec0c0 4px,#eec0c0 5px)}
+  .cov-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+  .cov-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid #bcc1cb}
+
+  /* concern badge — shape coded, color layered */
+  .concern{width:17px;height:17px;border-radius:50%;flex:0 0 auto;display:inline-block;border:2px solid currentColor;position:relative}
+  .concern.good{color:var(--t-good);background:currentColor}
+  .concern.low {color:var(--t-low);background:linear-gradient(90deg,currentColor 50%,#fff 50%)}
+  .concern.medium{color:var(--t-med);background:conic-gradient(currentColor 0 75%,#fff 0)}
+  .concern.high{color:var(--t-high);background:#fff}
+  .concern.high::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
+  .manualpip{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;vertical-align:top;margin-left:-4px}
+
+  /* paint badge */
+  .pbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600}
+  .pbadge .ec{background:#e7f0ff;color:#1554c0;border:1px solid #bcd2f7;border-radius:4px;padding:1px 5px}
+  .swatch{width:21px;height:16px;border-radius:3px;border:1px solid rgba(0,0,0,.28);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1}
+
+  /* pie past-paint chip */
+  .pie{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--c-past);display:inline-block;flex:0 0 auto}
+  .pie.full{background:var(--c-past)} .pie.none{background:#fff}
+  .pie.half{background:conic-gradient(var(--c-past) 0 50%,#fff 0)}
+  .pie.q3{background:conic-gradient(var(--c-past) 0 72%,#fff 0)}
+
+  /* ---------- QUEUE (Classic, ship-date ASC) ---------- */
+  .filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:16px;padding:3px 9px;font-size:11.5px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;min-width:110px}
+  .qrow{display:grid;grid-template-columns:18px 86px 1fr 120px 46px 44px;align-items:center;gap:9px;
+    padding:8px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+  .qrow:hover{background:var(--accent-soft)}
+  .qrow.sel{background:var(--accent-soft);border-color:#bcd2f7}
+  .qrow .cust{color:var(--muted);font-size:12px}
+  .qrow .pnwrap{display:flex;align-items:center;gap:6px;min-width:0}
+  .qrow .pn{font-family:var(--mono);font-weight:700}
+  .qrow .date{font-family:var(--mono);color:var(--muted);font-size:12px}
+  .qrow .bal{font-weight:700;text-align:right}
+  .daygroup{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+    margin:8px 8px 2px;display:flex;align-items:center;gap:8px}
+  .daygroup::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+
+  /* ---------- DETAIL: STACK (Concept 1) ---------- */
+  .detailhead{display:flex;align-items:center;gap:10px;padding:8px 4px;flex-wrap:wrap}
+  .detailhead .pn{font-family:var(--mono);font-weight:700;font-size:14px}
+  .detailhead .meta{color:var(--muted)}
+  .oprow{border:1px solid var(--line);border-radius:9px;margin:6px 0;background:#fff;overflow:hidden}
+  .oprow.up{background:var(--panel-3)}
+  .oprow.collapsed .cardstrip,.oprow.collapsed .subroute{display:none}
+  .ophead{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer}
+  .ophead .opname{font-weight:600;min-width:110px}
+  .ophead .opnet{font-family:var(--mono);color:var(--accent);font-weight:700}
+  .ophead .opnet small{color:var(--muted);font-weight:400}
+  .ophead .caret{color:var(--muted);transition:transform .15s;width:12px;display:inline-block}
+  .oprow.collapsed .caret{transform:rotate(-90deg)}
+  .ophead.paint{background:linear-gradient(0deg,#fff,#fff7e8)}
+  .tag-paint{font-size:9.5px;font-weight:700;color:#9a6b00;background:#ffedcc;border:1px solid #f0d18a;border-radius:4px;padding:1px 5px}
+  .cardstrip{display:flex;gap:6px;overflow-x:auto;padding:4px 8px 9px;align-items:stretch}
+  .ccard{flex:0 0 auto;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;cursor:pointer;border-left:4px solid #c3c8d2;position:relative}
+  .ccard:hover{border-color:#aeb6c4}
+  .ccard.past{border-left-color:var(--c-past)}
+  .ccard .sn{font-family:var(--mono);font-size:11px}
+  .ccard .loc{font-size:10.5px;color:var(--muted)}
+  .ccard .qty{font-weight:700;font-size:13px;margin-top:2px}
+  .ccard .corner{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--c-past)}
+  .ccard:not(.past) .corner{display:none}
+  .ccard.mrb{background:#e9eaee;color:#7b8090;border-left-color:#b7bcc7;font-style:italic;display:flex;align-items:center}
+  .subroute{margin:0 10px 9px 30px;border:1px dashed #b9c0cc;border-left:3px solid var(--accent);border-radius:9px;background:#f5f8ff}
+  .subhead{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;font-size:12px}
+  .subhead .lbl{font-weight:700;font-family:var(--mono)}
+  .subhead .xq{font-family:var(--mono);color:var(--muted)}
+  .subroute .innerops{display:none;padding:0 8px 8px}
+  .subroute.open .innerops{display:block}
+  .subroute.open .subcaret{transform:none}
+  .subcaret{transform:rotate(-90deg);transition:transform .15s;color:var(--muted)}
+
+  /* ---------- DETAIL: FLOW (Concept 5) ---------- */
+  .flowwrap{overflow:auto;padding:8px 4px;flex:1}
+  .flowline{display:flex;align-items:flex-start;min-width:max-content;padding-bottom:8px}
+  .fstage{min-width:152px;max-width:152px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px;position:relative;margin-right:32px}
+  .fstage.up{background:var(--panel-3)}
+  .fstage::after{content:"";position:absolute;right:-26px;top:34px;width:20px;height:2px;background:#b7bcc7}
+  .fstage::before{content:"";position:absolute;right:-26px;top:30px;border-left:7px solid #b7bcc7;border-top:5px solid transparent;border-bottom:5px solid transparent}
+  .fstage:last-child::after,.fstage:last-child::before{display:none}
+  .fstage.paint{border-color:#ecc569;background:#fff7e8}
+  .fstage .fname{font-weight:700;font-size:12px;display:flex;align-items:center;gap:5px}
+  .fstage .fnet{font-family:var(--mono);color:var(--accent);font-size:11px;margin:1px 0 6px}
+  .fmini{border:1px solid var(--line);border-radius:6px;margin:3px 0;padding:3px 6px;font-size:10.5px;font-family:var(--mono);background:#fff;cursor:pointer}
+  .fmini.past{border-left:4px solid var(--c-past)}
+  .fmini.mrb{background:#e9eaee;color:#7b8090;font-style:italic;cursor:default}
+  .fbranch{margin-top:8px;border-top:1px dashed #b9c0cc;padding-top:6px}
+  .fbranch .bl{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:4px;font-family:var(--mono)}
+  .fbranch .blnet{font-size:9.5px;color:var(--muted)}
+
+  /* popover */
+  #pop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,24,32,.4);z-index:100}
+  #pop.show{display:flex}
+  #pop .box{background:#fff;border-radius:12px;padding:16px 18px;min-width:310px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  #pop h4{margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  #pop .frow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px}
+  #pop .frow b{font-family:var(--mono)}
+  .note{font-size:11px;color:var(--muted);margin-top:8px}
+  .banner{background:#fff3d6;border:1px solid #f0d18a;color:#7a5b00;padding:6px 10px;border-radius:8px;font-size:12px;margin:0 0 8px}
+</style>
+</head>
+<body>
+<header class="app">
+  <span class="logo">Paint Allocation Dashboard <small>refined · classic queue + flow detail · placeholder data</small></span>
+  <span class="spacer"></span>
+  <span class="stat">2 planners active · 1 override changed in the last hour</span>
+</header>
+
+<div class="twopane">
+  <!-- ================= QUEUE ================= -->
+  <div class="pane">
+    <div class="pane-head">
+      <h3>Release Queue</h3><span class="spacer"></span>
+      <span style="font-size:11px;color:var(--muted)">sort: ship date ↑</span>
+      <button class="btn">Refresh data</button>
+    </div>
+    <div class="pane-head" style="background:#fff">
+      <div class="filters">
+        <span class="chip on">ACME <span>×</span></span>
+        <span class="chip">+ Customer</span>
+        <span class="chip">Concern ▾</span>
+        <label class="chip"><input type="checkbox" checked style="margin:0"> hide good</label>
+        <input class="search" placeholder="part #…">
+      </div>
+    </div>
+    <div class="pane-body" id="queue"></div>
+    <div class="pane-head" style="border-top:1px solid var(--line);border-bottom:none">
+      <div class="cov-legend">
+        <span><i style="background:var(--c-past)"></i>past paint</span>
+        <span><i class="seg-paint"></i>paintable</span>
+        <span><i class="seg-pipe"></i>pipeline</span>
+        <span><i class="seg-short"></i>short</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DETAIL ================= -->
+  <div class="pane">
+    <div class="pane-head">
+      <h3>Selected Release</h3><span class="spacer"></span>
+      <div class="seg" id="viewtoggle">
+        <button data-v="stack" class="on">▤ Stack</button>
+        <button data-v="flow">▷ Flow</button>
+      </div>
+    </div>
+    <div class="detailhead">
+      <span class="concern high"></span>
+      <span class="pn">PN-1234</span>
+      <span class="pbadge"><span class="ec">EC</span><span class="swatch" style="background:#5a5e63;color:#fff">GS</span></span>
+      <span class="meta">ACME · ship 07-04 · <b>Net 120</b></span>
+      <span class="spacer"></span>
+      <span style="min-width:160px">building... </span>
+    </div>
+    <div class="pane-body" id="detailStack"></div>
+    <div class="flowwrap" id="detailFlow" style="display:none"><div class="flowline" id="flowline"></div></div>
+  </div>
+</div>
+
+<!-- popover -->
+<div id="pop"><div class="box">
+  <h4>📦 Container detail</h4>
+  <div class="frow"><span>Serial</span><b id="p-sn">SN-00482</b></div>
+  <div class="frow"><span>Location</span><b>WIP-A12</b></div>
+  <div class="frow"><span>Alloc Qty</span><b>12</b></div>
+  <div class="frow"><span>Container Qty</span><b>40</b></div>
+  <div class="frow"><span>Add Date</span><b>2026-05-20</b></div>
+  <div class="frow"><span>Inventory Plant</span><b>P10</b></div>
+  <div class="frow"><span>Next Op</span><b>EC-Load</b></div>
+  <div class="note">Read-only · Esc or click outside to close</div>
+</div></div>
+
+<script>
+const swatches={Granite:"#5a5e63",Sandstone:"#cbb38a",Sapphire:"#2b4c8c",Ember:"#b5462b"};
+function glyph(hex){const n=parseInt(hex.slice(1),16);const l=.299*(n>>16)+.587*((n>>8)&255)+.114*(n&255);return l>140?"#222":"#fff";}
+
+/* ship-date ASC ordered placeholder releases */
+const RELEASES=[
+ {pn:"PN-1234",cust:"ACME",ship:"07-04",bal:120,cov:[20,30,50,20],concern:"high",manual:false,paint:{type:"EC+PC",col:"Granite",init:"GS"}},
+ {pn:"PN-5678",cust:"Borg Ind",ship:"07-05",bal:60,cov:[30,30,0,0],concern:"low",manual:true,paint:{type:"PC",col:"Sapphire",init:"SP"}},
+ {pn:"PN-9876",cust:"Cit Corp",ship:"07-06",bal:80,cov:[64,16,0,0],concern:"low",manual:false,paint:{type:"EC"}},
+ {pn:"PN-5555",cust:"ACME",ship:"07-08",bal:40,cov:[40,0,0,0],concern:"good",manual:false,paint:{type:"PC",col:"Ember",init:"EM"}},
+ {pn:"PN-3344",cust:"Delta LLC",ship:"07-09",bal:95,cov:[10,5,40,40],concern:"high",manual:false,paint:{type:"EC+PC",col:"Sandstone",init:"SA"}},
+ {pn:"PN-7788",cust:"Borg Ind",ship:"07-10",bal:50,cov:[0,20,30,0],concern:"medium",manual:false,paint:{type:"EC"}},
+ {pn:"PN-2200",cust:"Cit Corp",ship:"07-11",bal:30,cov:[30,0,0,0],concern:"good",manual:false,paint:{type:"PC",col:"Sapphire",init:"SP"}},
+];
+
+const OPS=[
+ {op:"Inspect",  net:15,paint:false,up:false,pp:1.0,cards:[{sn:"SN-901",loc:"QC-1",a:15,t:15,past:true}]},
+ {op:"Assy",     net:15,paint:false,up:false,pp:1.0,cards:[{sn:"SN-880",loc:"AS-3",a:15,t:30,past:true}]},
+ {op:"PC-Unload",net:15,paint:true, up:false,pp:1.0,cards:[{sn:"SN-771",loc:"PC-O",a:15,t:20,past:true}]},
+ {op:"PC-Load",  net:15,paint:true, up:false,pp:0.0,cards:[{sn:"SN-770",loc:"PC-I",a:15,t:20,past:false}]},
+ {op:"EC-Unload",net:15,paint:true, up:false,pp:0.5,cards:[{sn:"SN-650",loc:"EC-O",a:8,t:20,past:true},{sn:"SN-651",loc:"EC-O",a:7,t:18,past:false}],
+   sub:{pn:"PN-1234-SUB",xq:"×1",net:45,concern:"medium",paint:{type:"EC"},cov:[15,20,10,0],
+        ops:[{op:"EC-Unload",net:45,past:true},{op:"EC-Load",net:45,past:false},{op:"Blank",net:45,past:false}]}},
+ {op:"EC-Load",  net:15,paint:true, up:false,pp:0.0,cards:[{sn:"SN-640",loc:"EC-I",a:15,t:25,past:false}]},
+ {op:"PB",       net:15,paint:false,up:true,collapsed:true,pp:0.0,cards:[{sn:"SN-500",loc:"PB-2",a:15,t:60,past:false}]},
+ {op:"Laser",    net:15,paint:false,up:true,collapsed:true,pp:0.0,cards:[{sn:"SN-400",loc:"LS-1",a:15,t:80,past:false},{mrb:true,q:12}]},
+];
+
+function covBar(c,lg){const t=c.reduce((a,b)=>a+b,0)||1;return `<div class="cov ${lg?'lg':''}">
+ <span class="seg-past" style="width:${c[0]/t*100}%"></span>
+ <span class="seg-paint" style="width:${c[1]/t*100}%"></span>
+ <span class="seg-pipe" style="width:${c[2]/t*100}%"></span>
+ <span class="seg-short" style="width:${c[3]/t*100}%"></span></div>`;}
+function concernEl(t,manual){return `<span class="concern ${t}" title="concern: ${t}${manual?' (manual)':''}"></span>${manual?'<span class="manualpip"></span>':''}`;}
+function paintBadge(p){if(p.type==="EC")return `<span class="pbadge"><span class="ec">EC</span></span>`;
+ const hex=swatches[p.col]||"#888",g=glyph(hex),sw=`<span class="swatch" style="background:${hex};color:${g}">${p.init||"?"}</span>`;
+ return p.type==="PC"?`<span class="pbadge">${sw}</span>`:`<span class="pbadge"><span class="ec">EC</span>${sw}</span>`;}
+function pieClass(p){return p>=1?"full":p<=0?"none":p>=0.7?"q3":"half";}
+
+/* ---- queue (ship-date ASC, grouped by day for readability) ---- */
+function buildQueue(){const h=document.getElementById('queue');let lastDay=null;
+ RELEASES.forEach((r,i)=>{
+   if(r.ship!==lastDay){const g=document.createElement('div');g.className='daygroup';g.textContent='Ship '+r.ship;h.appendChild(g);lastDay=r.ship;}
+   const d=document.createElement('div');d.className='qrow';
+   d.innerHTML=`${concernEl(r.concern,r.manual)}
+     <span class="cust">${r.cust}</span>
+     <span class="pnwrap"><span class="pn">${r.pn}</span>${paintBadge(r.paint)}</span>
+     ${covBar(r.cov)}
+     <span class="date">${r.ship}</span>
+     <span class="bal">${r.bal}</span>`;
+   if(i===0)d.classList.add('sel');
+   d.onclick=()=>{h.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};
+   h.appendChild(d);
+ });}
+
+/* ---- detail: stack ---- */
+function buildStack(){
+ document.getElementById('detailStack').innerHTML=OPS.map(o=>{
+   const cards=o.cards.map(c=>c.mrb?`<div class="ccard mrb">MRB Qty: ${c.q}</div>`
+     :`<div class="ccard ${c.past?'past':''}" onclick="showPop(event,'${c.sn}')"><span class="corner"></span>
+        <div class="sn">${c.sn}</div><div class="loc">${c.loc}</div><div class="qty">${c.a}/${c.t}</div></div>`).join("");
+   const inner=o.sub?o.sub.ops.map(s=>`<div class="oprow"><div class="ophead"><span class="caret">▾</span>
+        <span class="opname">${s.op}</span><span class="opnet">${s.net}<small> net</small></span>
+        <span class="pie ${s.past?'full':'none'}" style="margin-left:8px"></span></div></div>`).join(""):"";
+   const sub=o.sub?`<div class="subroute"><div class="subhead" onclick="this.parentNode.classList.toggle('open')">
+        <span class="subcaret">▾</span><span class="lbl">${o.sub.pn}</span><span class="xq">${o.sub.xq}</span>${paintBadge(o.sub.paint)}
+        <span style="flex:1;max-width:150px">${covBar(o.sub.cov)}</span>${concernEl(o.sub.concern,false)}
+        <span class="xq">net ${o.sub.net}</span></div><div class="innerops">${inner}</div></div>`:"";
+   return `<div class="oprow ${o.up?'up':''} ${o.collapsed?'collapsed':''}">
+     <div class="ophead ${o.paint?'paint':''}" onclick="this.parentNode.classList.toggle('collapsed')">
+       <span class="caret">▾</span><span class="opname">${o.op}</span>
+       <span class="opnet">${o.net}<small> net</small></span>
+       <span class="pie ${pieClass(o.pp)}" title="past-paint share"></span>
+       <span class="spacer"></span>${o.paint?'<span class="tag-paint">PAINT</span>':''}</div>
+     <div class="cardstrip">${cards}</div>${sub}</div>`;
+ }).join("");}
+
+/* ---- detail: flow (raw -> final, left to right) ---- */
+function buildFlow(){
+ const stages=[...OPS].reverse();
+ document.getElementById('flowline').innerHTML=stages.map(o=>{
+   const minis=o.cards.map(c=>c.mrb?`<div class="fmini mrb">MRB ${c.q}</div>`
+     :`<div class="fmini ${c.past?'past':''}" onclick="showPop(event,'${c.sn}')">${c.sn} · ${c.a}/${c.t}</div>`).join("");
+   const branch=o.sub?`<div class="fbranch"><div class="bl">↳ ${o.sub.pn} ${o.sub.xq}</div>
+       <div class="blnet">net ${o.sub.net}</div>${covBar(o.sub.cov)}</div>`:"";
+   return `<div class="fstage ${o.up?'up':''} ${o.paint?'paint':''}">
+     <div class="fname">${o.op}${o.paint?' <span class="tag-paint">P</span>':''}</div>
+     <div class="fnet">net ${o.net}</div>${minis}${branch}</div>`;
+ }).join("");}
+
+/* ---- view toggle ---- */
+document.querySelectorAll('#viewtoggle button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('#viewtoggle button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+ const flow=b.dataset.v==='flow';
+ document.getElementById('detailStack').style.display=flow?'none':'block';
+ document.getElementById('detailFlow').style.display=flow?'flex':'none';
+});
+
+/* ---- popover ---- */
+function showPop(e,sn){e.stopPropagation();if(sn)document.getElementById('p-sn').textContent=sn;document.getElementById('pop').classList.add('show');}
+document.getElementById('pop').onclick=e=>{if(e.target.id==='pop')e.currentTarget.classList.remove('show');};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('pop').classList.remove('show');});
+
+buildQueue();buildStack();buildFlow();
+</script>
+</body>
+</html>

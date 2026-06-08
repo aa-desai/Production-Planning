@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paint Allocation Dashboard — 5 Look Concepts</title>
+<style>
+/* ============================================================
+   5 visual concepts over the SAME dashboard layout.
+   Switch via the top bar. Each concept = a theme class on <body>
+   overriding CSS variables + a few structural touches.
+   Placeholder data; design exploration only.
+   ============================================================ */
+
+/* ---------- base (shared) ---------- */
+:root{
+  --bg:#c7cad2; --panel:#fbfbfc; --panel-2:#eceef3; --panel-3:#e3e6ec;
+  --ink:#1f2430; --muted:#646b78; --faint:#8a909c; --line:#cfd3db; --line-soft:#dde0e7;
+  --accent:#3667d6; --accent-soft:#e7eeff;
+  --c-past:#2e9e3a; --c-paint:#f2c200; --c-pipe:#ef7d00; --c-short:#d32f2f;
+  --t-good:#2e9e3a; --t-low:#f2c200; --t-med:#ef7d00; --t-high:#d32f2f;
+  --radius:10px; --row-pad:8px 10px; --pane-shadow:0 1px 3px rgba(0,0,0,.06);
+  --hd-bg:#aeb2bd; --hd-ink:#1b1f27; --font:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:'Consolas','SFMono-Regular',ui-monospace,monospace; --hd-font:var(--font);
+  --chip-radius:16px; --weight-strong:600;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:13px}
+
+/* ---------- concept switcher ---------- */
+#switch{position:sticky;top:0;z-index:60;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:9px 14px;background:#0f1320;color:#fff;box-shadow:0 2px 12px rgba(0,0,0,.3)}
+#switch .t{font-weight:700;margin-right:6px}
+#switch .t small{font-weight:400;color:#98a2b6;margin-left:6px}
+#switch button{border:1px solid #2b3550;background:#1a2236;color:#cdd6ea;padding:6px 13px;border-radius:20px;cursor:pointer;font-size:12.5px;font-weight:600}
+#switch button.on{background:#3667d6;border-color:#3667d6;color:#fff}
+#switch .spc{flex:1}
+#desc{padding:10px 16px;background:#11151c;color:#aab3c5;font-size:12px}
+#desc b{color:#fff}
+
+/* ---------- app shell ---------- */
+header.app{display:flex;align-items:center;gap:12px;padding:9px 16px;background:var(--hd-bg);color:var(--hd-ink);border-bottom:1px solid rgba(0,0,0,.12)}
+header.app .logo{font-weight:700;font-family:var(--hd-font);letter-spacing:.01em}
+header.app .logo small{font-weight:400;color:var(--muted);margin-left:8px}
+.pulled{font-size:11.5px;font-family:var(--mono);background:rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.18);border-radius:6px;padding:2px 8px}
+.spacer{flex:1}.readonly{font-size:11px;opacity:.8}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:var(--weight-strong)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.twopane{display:grid;grid-template-columns:minmax(440px,1fr) 1.5fr;gap:12px;padding:12px;height:calc(100vh - 150px);min-height:560px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--pane-shadow)}
+.pane-head{padding:9px 12px;background:var(--panel-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pane-head h3{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-family:var(--hd-font);font-weight:700}
+.pane-body{overflow:auto;padding:8px;flex:1}
+
+/* ---------- coverage bar ---------- */
+.cov{display:flex;height:9px;width:100%;border-radius:5px;overflow:hidden;background:var(--panel-3);border:1px solid var(--line)}
+.cov.lg{height:13px}
+.cov span{display:block;height:100%}
+.seg-past{background:var(--c-past)} .seg-paint{background:var(--c-paint)}
+.seg-pipe{background:var(--c-pipe)} .seg-short{background:var(--c-short)}
+.cov-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.cov-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid rgba(0,0,0,.15)}
+
+/* ---------- concern pie ---------- */
+.concern{width:17px;height:17px;border-radius:50%;flex:0 0 auto;display:inline-block;border:2px solid currentColor;position:relative}
+.concern.good{color:var(--t-good);background:currentColor}
+.concern.low{color:var(--t-low);background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
+.concern.medium{color:var(--t-med);background:conic-gradient(currentColor 0 75%,transparent 0)}
+.concern.high{color:var(--t-high);background:transparent}
+.concern.high::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
+
+/* ---------- paint badge / swatch ---------- */
+.pbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
+.pbadge .ec{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:1px 5px}
+.swatch{min-width:21px;width:auto;height:16px;padding:0 4px;border-radius:3px;border:1px solid rgba(0,0,0,.28);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;white-space:nowrap}
+
+/* ---------- filters ---------- */
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:var(--chip-radius);padding:3px 10px;font-size:11.5px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+.chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chip.neg{background:var(--c-short);color:#fff;border-color:var(--c-short)}
+input.search{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 9px;font-size:12px;min-width:110px}
+.drange{flex:1;min-width:60px;accent-color:var(--accent)}
+
+/* ---------- queue rows ---------- */
+.daygroup{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:9px 8px 3px;display:flex;align-items:center;gap:8px;font-weight:700}
+.daygroup::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+.qrow{display:grid;grid-template-columns:18px 78px 30px minmax(74px,1fr) 78px 46px 40px;align-items:center;gap:8px;padding:var(--row-pad);border-radius:9px;cursor:pointer;border:1px solid transparent}
+.qrow:hover{background:var(--accent-soft)}
+.qrow.sel{background:var(--accent-soft);border-color:var(--accent)}
+.qrow .cust{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrow .plant{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
+.qrow .pnwrap{display:flex;align-items:center;gap:6px;min-width:0}
+.qrow .pn{font-family:var(--mono);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrow .date{font-family:var(--mono);color:var(--muted);font-size:11px}
+.qrow .bal{font-weight:700;text-align:right}
+
+/* ---------- detail ---------- */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:none;background:var(--panel);padding:5px 12px;cursor:pointer;font-size:12px;color:var(--muted)}
+.seg button.on{background:var(--accent);color:#fff}
+.detailhead{display:flex;align-items:center;gap:10px;padding:9px 6px;flex-wrap:wrap}
+.detailhead .pn{font-family:var(--mono);font-weight:700;font-size:15px}
+.detailhead .meta{color:var(--muted)}
+.oprow{border:1px solid var(--line);border-radius:9px;margin:6px 0;background:var(--panel);overflow:hidden}
+.oprow.up{background:var(--panel-3)}
+.ophead{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer}
+.ophead .opname{font-weight:var(--weight-strong);min-width:120px}
+.ophead .opnet{font-family:var(--mono);color:var(--accent);font-weight:700}
+.ophead .opnet small{color:var(--muted);font-weight:400}
+.ophead.paint{background:linear-gradient(0deg,var(--panel),color-mix(in srgb,var(--c-paint) 16%,var(--panel)))}
+.tag-paint{font-size:9.5px;font-weight:700;color:#7a5600;background:color-mix(in srgb,var(--c-paint) 30%,#fff);border:1px solid var(--c-paint);border-radius:4px;padding:1px 5px}
+.pie{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--c-past);display:inline-block;flex:0 0 auto}
+.cardstrip{display:flex;gap:6px;overflow-x:auto;padding:4px 8px 9px}
+.ccard{flex:0 0 auto;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--panel);border-left:4px solid var(--line);position:relative}
+.ccard.past{border-left-color:var(--c-past)}
+.ccard .sn{font-family:var(--mono);font-size:11px} .ccard .loc{font-size:10.5px;color:var(--muted)}
+.ccard .qty{font-weight:700;font-size:13px;margin-top:2px}
+.ccard.mrb{background:var(--panel-3);color:var(--faint);border-left-color:var(--line);font-style:italic;display:flex;align-items:center}
+.subroute{margin:0 10px 9px 28px;border:1px dashed var(--line);border-left:3px solid var(--accent);border-radius:9px;background:var(--accent-soft)}
+.subhead{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px}
+.subhead .lbl{font-weight:700;font-family:var(--mono)}
+
+/* ============================================================
+   THEME A — Bold Slate  (light, navy accent, strong type)
+   ============================================================ */
+body.theme-a{
+  --bg:#e6e8ee; --panel:#ffffff; --panel-2:#eef1f6; --panel-3:#e2e6ee;
+  --ink:#16202e; --muted:#5a6678; --line:#d3d9e2; --line-soft:#e3e7ee;
+  --accent:#27457e; --accent-soft:#e7edf7;
+  --c-past:#1f9d4d; --c-paint:#f2bf0b; --c-pipe:#f47b1f; --c-short:#df3b3b;
+  --hd-bg:#27457e; --hd-ink:#ffffff; --radius:9px; --weight-strong:700;
+}
+body.theme-a header.app .logo small{color:#aebfdc}
+body.theme-a .pulled{color:#dfe6f4}
+body.theme-a .readonly{color:#cdd8ee}
+body.theme-a .qrow.sel{border-left:4px solid var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+body.theme-a .pane-head h3{color:var(--accent)}
+
+/* ============================================================
+   THEME B — Clean Flat  (airy white, teal accent, minimal)
+   ============================================================ */
+body.theme-b{
+  --bg:#f7f8fa; --panel:#ffffff; --panel-2:#fbfcfd; --panel-3:#f1f3f6;
+  --ink:#243140; --muted:#7c8794; --line:#edf0f3; --line-soft:#f2f4f7;
+  --accent:#0ea5a5; --accent-soft:#e6f7f7;
+  --c-past:#10b06a; --c-paint:#f5c518; --c-pipe:#f59022; --c-short:#ef4d4d;
+  --hd-bg:#ffffff; --hd-ink:#243140; --radius:12px; --row-pad:11px 12px;
+  --pane-shadow:0 1px 2px rgba(20,30,50,.04); --chip-radius:8px;
+}
+body.theme-b header.app{border-bottom:1px solid #edf0f3}
+body.theme-b .pane{border-color:#edf0f3}
+body.theme-b .pane-head{background:#fff;border-bottom:1px solid #f1f3f6}
+body.theme-b .cov{height:7px;border:none}
+body.theme-b .qrow{border-radius:10px}
+body.theme-b .qrow.sel{background:var(--accent-soft);border-color:transparent}
+
+/* ============================================================
+   THEME C — Industrial  (bold safety palette, mono, chunky)
+   ============================================================ */
+body.theme-c{
+  --bg:#d6dade; --panel:#ffffff; --panel-2:#e9edf0; --panel-3:#dde2e6;
+  --ink:#10151b; --muted:#566069; --line:#aeb6bd; --line-soft:#c6cdd3;
+  --accent:#ff6a00; --accent-soft:#ffe9d6;
+  --c-past:#1f9d3a; --c-paint:#ffd000; --c-pipe:#ff7a00; --c-short:#e11d1d;
+  --hd-bg:#16202a; --hd-ink:#ffffff; --hd-font:var(--mono); --font:'Segoe UI',system-ui,sans-serif;
+  --radius:4px; --weight-strong:700; --chip-radius:4px; --pane-shadow:none;
+}
+body.theme-c header.app{border-bottom:4px solid var(--accent);
+  background-image:repeating-linear-gradient(45deg,#16202a,#16202a 12px,#1c2733 12px,#1c2733 24px)}
+body.theme-c .pane{border:2px solid var(--line)}
+body.theme-c .pane-head{border-bottom:2px solid var(--line)}
+body.theme-c .pane-head h3{font-family:var(--mono);color:var(--ink);font-weight:700}
+body.theme-c .cov{height:13px;border:1.5px solid #10151b;border-radius:2px}
+body.theme-c .qrow{border:2px solid transparent;border-radius:3px}
+body.theme-c .qrow.sel{border-color:var(--accent);background:var(--accent-soft)}
+body.theme-c .pn{font-weight:700}
+body.theme-c .swatch{border-radius:2px;border-width:1.5px}
+body.theme-c .btn{border-radius:3px;text-transform:uppercase;letter-spacing:.04em;font-size:11px}
+
+/* ============================================================
+   THEME D — Soft Cards  (lavender, indigo accent, rounded, shadows)
+   ============================================================ */
+body.theme-d{
+  --bg:#f2f1fa; --panel:#ffffff; --panel-2:#f6f5fc; --panel-3:#efeef9;
+  --ink:#2a2740; --muted:#7d7a93; --line:#e7e5f3; --line-soft:#efeef8;
+  --accent:#6d5ef0; --accent-soft:#eeebfe;
+  --c-past:#34c08a; --c-paint:#f6c545; --c-pipe:#f7913f; --c-short:#f0596b;
+  --hd-bg:#ffffff; --hd-ink:#2a2740; --radius:16px; --row-pad:10px 12px;
+  --pane-shadow:0 6px 22px rgba(80,70,160,.10); --chip-radius:20px;
+}
+body.theme-d header.app{border-bottom:1px solid #e7e5f3}
+body.theme-d .pane-head{background:#fff}
+body.theme-d .cov{height:10px;border:none}
+body.theme-d .qrow{margin:5px 2px;border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(80,70,160,.05)}
+body.theme-d .qrow:hover{box-shadow:0 5px 16px rgba(109,94,240,.14);border-color:#d7d2f5}
+body.theme-d .qrow.sel{border-color:var(--accent);background:var(--accent-soft)}
+body.theme-d .ccard{border-radius:12px}
+body.theme-d .concern.high{background:color-mix(in srgb,var(--t-high) 14%,#fff)}
+
+/* ============================================================
+   THEME E — Midnight Bold  (true dark, vivid accents)
+   ============================================================ */
+body.theme-e{
+  --bg:#0d111d; --panel:#161c2c; --panel-2:#1b2333; --panel-3:#222b3e;
+  --ink:#e8edf7; --muted:#8b95ab; --faint:#6b7488; --line:#2a3346; --line-soft:#222b3e;
+  --accent:#4d8bff; --accent-soft:#1a2740;
+  --c-past:#34d399; --c-paint:#fbd24b; --c-pipe:#fb9b3a; --c-short:#fb5a6a;
+  --hd-bg:#0a0e18; --hd-ink:#e8edf7; --radius:11px;
+  --pane-shadow:0 1px 0 rgba(255,255,255,.03); --weight-strong:600;
+}
+body.theme-e header.app{border-bottom:1px solid #1c2536}
+body.theme-e .pane{border-color:#2a3346}
+body.theme-e .btn{background:#1f2940;border-color:#2c3650;color:#cdd7ea}
+body.theme-e .pulled{background:rgba(255,255,255,.05);border-color:#2a3346;color:#aeb8cc}
+body.theme-e input.search{background:#1f2940;border-color:#2c3650;color:#e8edf7}
+body.theme-e .cov{border-color:#2a3346}
+body.theme-e .ophead.paint{background:linear-gradient(0deg,var(--panel),#241f10)}
+body.theme-e .tag-paint{color:#fbd24b;background:#2a2310;border-color:#5a4d18}
+body.theme-e .pbadge .ec{background:#16233f;color:#7fb0ff;border-color:#2f4c7e}
+body.theme-e .qrow.sel{background:#1a2740;border-color:var(--accent)}
+</style>
+</head>
+<body class="theme-a">
+
+<div id="switch">
+  <span class="t">Paint Allocation Dashboard <small>5 look concepts · same layout · placeholder data</small></span>
+  <button data-t="a" class="on">A · Bold Slate</button>
+  <button data-t="b">B · Clean Flat</button>
+  <button data-t="c">C · Industrial</button>
+  <button data-t="d">D · Soft Cards</button>
+  <button data-t="e">E · Midnight</button>
+</div>
+<div id="desc"></div>
+
+<header class="app">
+  <span class="logo">Paint Allocation Dashboard <small>v-concept</small></span>
+  <span class="pulled">Data Pulled At: 06-01-26 12:25:45</span>
+  <span class="spacer"></span>
+  <span class="readonly">read-only view</span>
+  <button class="btn primary">Refresh data</button>
+</header>
+
+<div class="twopane">
+  <!-- QUEUE -->
+  <div class="pane">
+    <div class="pane-head"><h3>Release Queue</h3><span class="spacer"></span>
+      <span style="font-size:11px;color:var(--muted)">sort: ship date &uarr;</span></div>
+    <div class="pane-head" style="background:var(--panel)">
+      <div class="filters">
+        <span class="chip">+ Customer</span>
+        <span class="chip on" id="ecc">EC</span>
+        <span class="chip neg" id="pcc">not PC</span>
+        <label class="chip"><input type="checkbox" style="margin:0"> hide good</label>
+        <input class="search" placeholder="part #&hellip;">
+      </div>
+    </div>
+    <div class="pane-head" style="background:var(--panel)">
+      <div class="filters" style="flex-wrap:nowrap;align-items:center">
+        <span style="font-size:11px;color:var(--muted)">Ship</span>
+        <b style="font-family:var(--mono);font-size:11px">04-02</b>
+        <input type="range" class="drange" value="20">
+        <input type="range" class="drange" value="80">
+        <b style="font-family:var(--mono);font-size:11px">06-15</b>
+        <span class="chip">all dates</span>
+      </div>
+    </div>
+    <div class="pane-body" id="queue"></div>
+    <div class="pane-head" style="border-top:1px solid var(--line);border-bottom:none">
+      <div class="cov-legend">
+        <span><i style="background:var(--c-past)"></i>past paint</span>
+        <span><i style="background:var(--c-paint)"></i>paintable</span>
+        <span><i style="background:var(--c-pipe)"></i>pipeline</span>
+        <span><i style="background:var(--c-short)"></i>short</span>
+      </div>
+    </div>
+  </div>
+  <!-- DETAIL -->
+  <div class="pane">
+    <div class="pane-head"><h3>Selected Release</h3><span class="spacer"></span>
+      <div class="seg"><button class="on">&#9636; Stack</button><button>&#9655; Flow</button></div></div>
+    <div class="detailhead" id="dhead"></div>
+    <div class="pane-body" id="detail"></div>
+  </div>
+</div>
+
+<script>
+const DESCS={
+ a:"<b>A · Bold Slate</b> — light slate surfaces, deep navy header & accents, heavier type and a strong selected-row rail. Confident and corporate; reads well in a bright shop office.",
+ b:"<b>B · Clean Flat</b> — airy near-white, hairline borders, generous row spacing, calm teal accent, thin coverage bars. Minimal modern-SaaS feel; lowest visual noise.",
+ c:"<b>C · Industrial</b> — bold safety palette (orange accent), monospaced headers, chunky 2px borders, hazard-stripe header, thick coverage bars. Control-panel / factory-floor energy.",
+ d:"<b>D · Soft Cards</b> — lavender canvas, indigo accent, big rounded corners, queue rows as floating cards with soft shadows. Friendly and approachable.",
+ e:"<b>E · Midnight</b> — true dark mode, vivid neon coverage colours that pop against deep navy panels. Best for a wall monitor / dim environments."
+};
+const RELEASES=[
+ {c:"Paccar Parts",pl:"P10",pn:"N85-1022",ship:"04-02",bal:120,cov:[20,30,50,20],con:"high",badge:{t:"EC+PC",sw:"Cab Blk",hex:"#1a1a1a",g:"#fff"}},
+ {c:"Paccar Parts",pl:"P6",pn:"T11-1151R",ship:"04-03",bal:60,cov:[30,30,0,0],con:"low",badge:{t:"PC",sw:"Csc Blk",hex:"#202024",g:"#fff"}},
+ {c:"Components Co",pl:"P10",pn:"AXE100517",ship:"04-10",bal:80,cov:[64,16,0,0],con:"low",badge:{t:"EC"}},
+ {c:"Dynacraft",pl:"P10",pn:"A85-6370",ship:"04-12",bal:40,cov:[40,0,0,0],con:"good",badge:{t:"PC",sw:"Ag Grn",hex:"#208e06",g:"#fff"}},
+ {c:"Kenworth Mx",pl:"P10",pn:"F85-1629",ship:"04-14",bal:185,cov:[150,35,0,0],con:"low",badge:{t:"EC+PC",sw:"Ind Chrd",hex:"#3a3f45",g:"#fff"}},
+ {c:"Deere",pl:"P10",pn:"UC48-220",ship:"04-18",bal:95,cov:[10,5,40,40],con:"high",badge:{t:"EC+PC",sw:"JD Grn",hex:"#367c2b",g:"#fff"}},
+ {c:"Praetorian",pl:"P6",pn:"1246-88",ship:"04-20",bal:50,cov:[0,20,30,0],con:"medium",badge:{t:"EC"}},
+ {c:"Cyprium",pl:"P6",pn:"LC24-19",ship:"04-22",bal:500,cov:[500,0,0,0],con:"good",badge:{t:"PC",sw:"Sapph",hex:"#2b4c8c",g:"#fff"}},
+ {c:"Paccar Parts",pl:"P10",pn:"N47-220",ship:"04-25",bal:30,cov:[30,0,0,0],con:"good",badge:{t:"EC"}},
+ {c:"Deere",pl:"P10",pn:"AT457-12",ship:"04-25",bal:18,cov:[2,0,6,10],con:"high",badge:{t:"PC",sw:"?",hex:"#9aa0a8",g:"#222"}},
+];
+const OPS=[
+ {op:"Inspection & Ship - FG",net:15,paint:false,up:false,pp:1,cards:[{sn:"SN-901",loc:"QC-1",a:15,t:15,past:true}]},
+ {op:"PC-Unload - WIP",net:15,paint:true,up:false,pp:1,cards:[{sn:"T771",loc:"PC-O",a:15,t:20,past:true}]},
+ {op:"EC-Unload - WIP",net:15,paint:true,up:false,pp:.5,cards:[{sn:"T925241",loc:"C-PACKR3",a:8,t:105,past:true},{sn:"T651",loc:"EC-O",a:7,t:18,past:false}],
+   sub:{pn:"HXE209761",net:45,con:"medium",cov:[15,20,10,0]}},
+ {op:"EC-Load - WIP",net:15,paint:true,up:false,pp:0,cards:[{sn:"T640",loc:"EC-I",a:15,t:25,past:false}]},
+ {op:"Pressbrake - WIP",net:15,paint:false,up:true,pp:0,cards:[{sn:"T500",loc:"PB-2",a:15,t:60,past:false},{mrb:true,q:12}]},
+ {op:"Laser - WIP",net:15,paint:false,up:true,pp:0,cards:[{sn:"T400",loc:"LS-1",a:15,t:80,past:false}]},
+];
+const $=s=>document.querySelector(s);
+function cov(c,lg){const t=(c[0]+c[1]+c[2]+c[3])||1;return `<div class="cov ${lg?'lg':''}">
+ <span class="seg-past" style="width:${c[0]/t*100}%"></span><span class="seg-paint" style="width:${c[1]/t*100}%"></span>
+ <span class="seg-pipe" style="width:${c[2]/t*100}%"></span><span class="seg-short" style="width:${c[3]/t*100}%"></span></div>`;}
+function concern(t){return `<span class="concern ${t}" title="${t}"></span>`;}
+function badge(b){if(!b)return '';if(b.t==='EC')return `<span class="pbadge"><span class="ec">EC</span></span>`;
+ const sw=`<span class="swatch" style="background:${b.hex};color:${b.g}">${b.sw}</span>`;
+ return b.t==='PC'?`<span class="pbadge">${sw}</span>`:`<span class="pbadge"><span class="ec">EC</span>${sw}</span>`;}
+function pie(s){return `style="${s>=1?'background:var(--c-past)':s<=0?'background:transparent':'background:conic-gradient(var(--c-past) 0 '+Math.round(s*100)+'%,transparent 0)'}"`;}
+
+function renderQueue(){
+ const h=$('#queue');let last=null,html='';
+ RELEASES.forEach((r,i)=>{
+  if(r.ship!==last){html+=`<div class="daygroup">Ship 2026-${r.ship}</div>`;last=r.ship;}
+  html+=`<div class="qrow ${i===0?'sel':''}" data-i="${i}">${concern(r.con)}
+    <span class="cust" title="${r.c}">${r.c}</span><span class="plant">${r.pl}</span>
+    <span class="pnwrap"><span class="pn">${r.pn}</span>${badge(r.badge)}</span>
+    ${cov(r.cov)}<span class="date">${r.ship}</span><span class="bal">${r.bal}</span></div>`;
+ });
+ h.innerHTML=html;
+ h.querySelectorAll('.qrow').forEach(el=>el.onclick=()=>{h.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');loadDetail(+el.dataset.i);});
+}
+function loadDetail(i){
+ const r=RELEASES[i];
+ $('#dhead').innerHTML=`${concern(r.con)}<span class="pn">${r.pn}</span>${badge(r.badge)}
+   <span class="meta">${r.c} &middot; ${r.pl} &middot; ship 2026-${r.ship} &middot; <b>Bal ${r.bal}</b></span>
+   <span class="spacer"></span><span style="min-width:150px">${cov(r.cov,true)}</span>`;
+ $('#detail').innerHTML=OPS.map(o=>{
+  const cards=o.cards.map(c=>c.mrb?`<div class="ccard mrb">MRB Qty: ${c.q}</div>`
+    :`<div class="ccard ${c.past?'past':''}"><div class="sn">${c.sn}</div><div class="loc">${c.loc}</div><div class="qty">${c.a}/${c.t}</div></div>`).join('');
+  const sub=o.sub?`<div class="subroute"><div class="subhead"><span class="lbl">${o.sub.pn}</span>
+    <span style="font-family:var(--mono);color:var(--muted)">net ${o.sub.net}</span>
+    <span style="flex:1;max-width:150px">${cov(o.sub.cov)}</span>${concern(o.sub.con)}</div></div>`:'';
+  return `<div class="oprow ${o.up?'up':''}"><div class="ophead ${o.paint?'paint':''}">
+    <span style="color:var(--muted)">&#9662;</span><span class="opname">${o.op}</span>
+    <span class="opnet">${o.net}<small> net</small></span><span class="pie" ${pie(o.pp)}></span>
+    <span class="spacer"></span>${o.paint?'<span class="tag-paint">PAINT</span>':''}</div>
+    <div class="cardstrip">${cards}</div>${sub}</div>`;
+ }).join('');
+}
+document.querySelectorAll('#switch button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('#switch button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+ document.body.className='theme-'+b.dataset.t;$('#desc').innerHTML=DESCS[b.dataset.t];
+});
+$('#desc').innerHTML=DESCS.a;
+renderQueue();loadDetail(0);
+</script>
+</body>
+</html>

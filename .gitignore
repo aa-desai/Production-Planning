@@ -1,0 +1,48 @@
+# =====================================================================
+# Paint Management — Production Planning
+# Tracks source (.py), docs (.md), build (.ps1/.bat), config (.ini/.csv).
+# Excludes the virtualenv, raw ERP data, derived outputs, and binaries.
+# =====================================================================
+
+# ---- Python ----
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ---- Build / binary artifacts ----
+*.exe
+*.zip
+*.pbix
+build/
+dist/
+*.spec
+
+# ---- Raw ERP data (read-only inputs) + derived outputs — never in git ----
+/Inventory/
+/Inventory P6/
+/Releases/
+/Process Routings/
+/Part Attributes/
+/BOM/
+/Allocations/
+/P10 Planning Data/
+/Archive/
+/Dashboard/
+*.xlsx
+
+# ---- Runtime / derived files ----
+*.log
+*_snapshot*.json
+runlist_draft.json
+runlist_live.json
+Runlists/
+Snapshots/
+Views/
+
+# ---- OS / OneDrive / editor cruft ----
+desktop.ini
+.DS_Store
+Thumbs.db
+.claude/
