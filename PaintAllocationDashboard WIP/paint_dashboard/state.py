@@ -102,8 +102,9 @@ class AppState:
         """
         try:
             sidx = rrec.build_serial_index(result)
+            last_ec, last_pc = rrec.build_last_paint_seqs(result)
             draft = rpush.load_draft()
-            draft, rep = rrec.reconcile_doc(draft, sidx)
+            draft, rep = rrec.reconcile_doc(draft, sidx, last_ec, last_pc)
             rpush.save_draft(draft)
             if any(rep[t]["removed"] or rep[t]["reduced"] for t in ("pc", "ec")):
                 log.info("Runlist reconcile: pc=%s ec=%s", rep["pc"], rep["ec"])

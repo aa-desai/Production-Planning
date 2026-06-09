@@ -174,6 +174,184 @@ cd PaintAllocationDashboard
 ---
 
 ## Session log (newest first)
+### 2026-06-09 — Multi-release queue selection + combined ordered push; runbar moved under title
+- **Runbar relocated** to directly under the "Selected Release" title (moved above `detailhead`).
+- **Queue checkboxes (`RELSEL`)** — each Release Queue row gets a checkbox + a selection-order
+  badge (`.relselbox`/`.relnum`; new leading 26 px grid column, `data-rid` on the row). `toggleRel`
+  / `paintRelNums` keep the badge numbers (tick order) and `.relsel` highlight in sync; row-body
+  click still loads detail (checkbox `stopPropagation`).
+- **Combined push** — `pushSelection(target)` (async): pushes each ticked release in tick order via
+  `allocItemsFromDetail` (fetch `/detail`, take every `allocatedHere>0` container = full required
+  alloc, like Select-allocation) through the existing `/runlist/push`, then the viewed release's
+  `RUNSEL` containers (skipped if that release is itself ticked). Sums added/skipped/ecAuto → toasts;
+  clears both selections after. `hasSelection()` gates with a warn toast; `onPush` wraps `btnRun`.
+  `updateSelCount` now shows "N releases · M containers". Reuses the per-release server pipeline so
+  cascade (§12) + PC→EC deficit (§13) stay correct.
+- **Verified:** `py_compile` + `node --check`; token checks; live boot — page serves, runbar is
+  before `detailhead`, 8-col grid present (no draft mutation in the check).
+
+### 2026-06-09 — Skipped-on-push shows as an auto-dismiss toast (no extra click)
+- Added a toast overlay: `#toasts` container + `toast(msg,type,ms)` (auto-dismiss ~4.5 s; `ok/warn/err`
+  border colours). The push "N container(s) skipped — already at/past the OP op" message now calls
+  `toast(...,'warn')` instead of `alert()`. Hard errors (push/publish failures) keep `alert()`.
+- Verified: `py_compile` + `node --check`; tokens present, no `alert(res.skipped`. DESIGN §18a added.
+
+### 2026-06-09 — Editor: acknowledge checkmark disappears once ticked (no residual)
+- `eitemHTML` now renders the `.eack` checkmark only while `amber` (auto-added AND not acknowledged);
+  acknowledging removes the button entirely (effectively one-way from the UI). Dropped the dead
+  `.eack.done` CSS. Backend/endpoint unchanged. Verified: `py_compile` + `node --check`.
+
+### 2026-06-09 — Editor: bigger collapse pip + header icon contrast (CSS only)
+- `.ehdr .caret` enlarged to a 26×26 hit target (17 px glyph, hover halo, negative margins keep the
+  header height); `.ghandle` bumped to 15 px. Fixed visibility: caret/handle forced white on the dark
+  navy `.colhdr` (`color:#fff` / `rgba(255,255,255,.82)`, white hover halo) and `--accent` on `.parthdr`.
+- Verified: `py_compile` + token check.
+
+### 2026-06-09 — Editor: acknowledge auto-added EC + item rows drop the part number
+1. **Acknowledge checkmark** — new `RunItem.acknowledged` (default False); `push.acknowledge(draft,
+   id, value)` + `POST /runlist/ack {runItemId, acknowledged}` (saves only when found). Editor shows
+   a checkmark on **auto-added EC only**; `ackItem()` toggles it, clears the amber, and
+   `updateReviewNote()` recomputes the “⚠ N auto-added EC — review” banner (counts auto items where
+   `!acknowledged`). Wired into the list's delegated click (before the header-collapse branch).
+2. **Item rows = Serial · Location · Qty** — `eitemHTML` no longer renders `partNo` (it's in the
+   group header); serial now takes the prominent `.es` mono slot.
+- **Verified:** `py_compile` + `node --check`; `acknowledge()` unit (found/miss/toggle); live boot —
+  GET / carries `class="eack"`/`ackItem`/`/runlist/ack`, `POST /runlist/ack` bogus id → `{ok:false}`
+  with the draft untouched; served item rows no longer contain `it.partNo`.
+
+### 2026-06-09 — Publish-when-empty + collapsible editor headers
+1. **First publish never blocks** — `push.publish` now: if `store.read_live() is None` (nothing
+   published yet) → `lock.seize()` (new, unconditional `_write_lock`) and publish; else the normal
+   `try_takeover` rules apply (live foreign owner still blocks). Stops a stale/foreign lock from
+   blocking the very first floor view. DESIGN §16 updated.
+2. **Collapsible group headers** — click any colour/part header in the editor to collapse/expand
+   its chunk (`COLL={pc,ec}` key sets; caret rotates). Collapsed rows render as `ehide`
+   (display:none) so header-drag still carries them and `commitOrder` keeps the full order;
+   post-drag click suppressed via `list._noclick`.
+- **Verified:** `py_compile` + `node --check`; `push.publish` unit (no-live → seize+ok+wrote live;
+  live+foreign → blocked/locked); served HTML carries the collapse markup (`COLL`, `data-ckey`,
+  caret, `ehide`, click handler).
+
+### 2026-06-09 — Reconcile (last-op gate + 5-min heartbeat) + editor UX (grouped DnD, reset, button feedback)
+Five planner-requested changes (DESIGN §15/§16/§17/§18b updated):
+1. **Reconcile gate = last paint op** — `reconcile.build_last_paint_seqs(result)` → per-part
+   `(last_ec_seq, last_pc_seq)`; `reconcile_items(items, sidx, last_op_by_part)` removes a container
+   when `node.seq ≥ last EC-op` (EC list) / `≥ last PC-op` (PC list) — mirrors the app-wide `≥`
+   "past last paint" test — else gone/zero-qty → remove, dropped-qty → reduce. `reconcile_doc` now
+   takes `(last_ec, last_pc)`; `state._reconcile_runlist` builds + passes them. Report adds
+   `removedSerials`.
+2. **5-min heartbeat** — `watcher.start_reconcile_heartbeat()` (started in `app.main`, gated with the
+   watcher) calls `STATE.refresh()` every 300 s (config `reconcile_heartbeat_sec`): re-reads inventory
+   + reconciles even with no ERP pull / no manual Refresh. Refresh button already reconciles.
+3. **Click feedback (2.1)** — universal press-dip on `.btn/.chip/.hchip/.copybtn`/toggle/editor rows.
+4. **Loading buttons (2.2)** — generic `btnRun(btn,label,factory,opts)` (spinner→✓done/✕fail→revert)
+   wired to Rebuild graph, Push→PC/EC, Publish, editor Save/Confirm/Clear/Reset.
+5. **Editor rework (2.3/2.4/2.5)** — `EDIT={pc,ec}` arrays drive render; **derived** group headers
+   (PC colour→part, EC part). Pointer-free HTML5 DnD with **FLIP make-space** (`flip()`); **group
+   headers drag their whole chunk** (`chunkNodes`); **free placement → headers recomputed on drop**
+   (`commitOrder` re-reads `.eitem` order, re-renders). **Reset to live** per pane
+   (`push.reset_to_live` + `POST /runlist/reset`). Open editor polls draft (20 s) and **animates
+   removed rows out** (`reconcileEditorList`); floor PC/EC pages do the same via
+   `animateThenRender` (`data-serial` diff); runbar draft-count poll reflects removals with editor closed.
+- **Verified:** all changed modules `py_compile`; main+PC+EC embedded JS `node --check`; reconcile
+  unit (EC keeps only pre-EC, PC keeps pre-PC, reduce works); **live boot on real ERP data** — server
+  served new UI (Reset/btnRun/wireEditorDnD present), boot reconcile removed 3 PC + 11 EC by the new
+  gate, `POST /runlist/reset pc` restored 3 from live, `/runlist/reorder` ok.
+- **Note (unchanged):** the root `.gitignore Runlists/` still shadows the `paint_dashboard/runlists/`
+  source on case-insensitive Windows — fix before committing (see 2026-06-08 entry).
+
+### 2026-06-08 — Durable logging + crash capture (diagnose intermittent exe crashes)
+- **Problem:** the exe's console window crashes intermittently with no trace. Logging went **only to
+  stdout** (`__init__.py` `StreamHandler(sys.stdout)`), so anything useful died with the window; and a
+  *native* crash (segfault in pandas/numpy/calamine) bypasses Python so `run()`'s try/except never fires.
+- **Added (all in the WIP package, files written beside the exe):**
+  - **Rotating file log** `<ProgramName>.log` (2 MB × 5) next to the exe — per-program name (`PaintAllocationDashboard.log`,
+    `PaintRunlistPC/EC.log`) so the 3 exes don't race one file. `logging.raiseExceptions=False` so a log hiccup
+    (OneDrive lock) can't crash the app. (`__init__.py`)
+  - **`faulthandler`** → `<ProgramName>_fault.log` (all threads) — captures **hard/native** crashes that close
+    the window with no Python traceback. (`__init__.py`)
+  - **`sys.excepthook` + `threading.excepthook`** → log uncaught main-thread AND worker-thread (watcher/heartbeat/
+    request) exceptions with full traceback to the file. (`__init__.py`)
+  - **`DashboardServer(ThreadingHTTPServer)`** overrides `handle_error` to log per-request handler errors (stdlib
+    default prints to stderr → lost). `daemon_threads=True`. (`server.py`, wired in `app.py`)
+  - Startup now logs the **log-file paths**; `run()` names the log file on fatal exit and tolerates a missing
+    console on the `input()` pause. (`app.py`)
+- **Verified (source):** `py_compile`; injected a main-thread crash → `*.log` has "UNCAUGHT EXCEPTION (main
+  thread)" + traceback; injected a worker-thread crash → "UNCAUGHT EXCEPTION (thread …)" + traceback;
+  `faulthandler.is_enabled()=True` + fault file gets a per-session header. Rebuilt all 3 exes.
+- **How to investigate the crash:** reproduce, then read **`PaintAllocationDashboard WIP\PaintAllocationDashboard.log`**
+  (Python errors) and **`…_fault.log`** (native crash dump). The tail at crash time names the culprit.
+
+### 2026-06-08 — FIX R22: "can't publish — owned by yourself" runlist-lock deadlock
+- **Symptom:** planner got *"Cannot publish — runlist is owned by adesai @PF3N7HZD"* while being adesai@PF3N7HZD.
+- **Cause:** `runlists/lock.py` keyed ownership on a per-process UUID (`_INSTANCE_ID`). A *second live
+  instance* of the same user on the same machine (a relaunch / second window, still heartbeating) was
+  treated as a **foreign live owner**, so the active window's `try_takeover()` returned False → publish 409.
+- **Fix:** added `_same_principal(info)` (same machine + user, case-insensitive) and made `acquire()` +
+  `try_takeover()` reclaim immediately when the current owner is the same principal — only a *different*
+  machine/user now blocks. Heartbeat/`instance` bookkeeping unchanged; foreign-stale seize + foreign-live
+  block unchanged. DESIGN §14 + decision **R22** added.
+- **Verified:** `py_compile`; unit (same-principal fresh → reclaim ✅ · foreign fresh → block ✅ · foreign
+  stale → seize ✅ · `acquire()` same-principal → reclaim ✅). Cleared the stale on-disk lock; **rebuilt the
+  exe** so the fix ships. **Frozen-exe e2e:** booted the rebuilt `PaintAllocationDashboard.exe`, planted the
+  exact deadlock lock (same user/machine, different instance, fresh heartbeat), `POST /runlist/publish` →
+  **200 ok:true, lock reclaimed** (instance flipped off the zombie).
+- **Build hardening (`build-PaintAllocationDashboard WIP.ps1`):** the first rebuild silently left a STALE
+  planner exe — a running instance file-locked the destination and the script only checked PyInstaller's exit
+  code, not the `Copy-Item`. Hardened `Build-Exe` to stop instances right before copy, `Copy-Item -ErrorAction
+  Stop`, and **verify the destination size matches** (throws otherwise) so a locked/stale exe can never ship
+  silently again. (Also note: keep non-ASCII out of PS *string literals* — PS 5.1 reads the BOM-less file as
+  ANSI and an em-dash's trailing byte decodes to `"`, breaking the parse; em-dashes in comments are fine.)
+  Parse-verified.
+- **Note for planners:** opening the dashboard **twice** is what triggered it; the lock is now tolerant, but
+  one window per planner is still the intended use.
+
+### 2026-06-08 — WIP refinements R17–R21 (push eligibility · filters · detail greying/order)
+Built the five DESIGN.md refinements (§11/§6/§6a/§4, decisions R17–R21). **All changes are in the
+`PaintAllocationDashboard WIP\` package only.**
+- **R17 — push eligibility by op (§11):** `push.eligible_items(detail, target, items)` (pure, stdlib)
+  drops any selected container already **in/past** the target paint op — PC drops in/past any PC op, EC
+  drops in/past any EC op — gated by the container's op `seq` vs. the earliest matching paint op on its
+  own routing level (sub-routings gated by their own EC/PC op; a routing with no such op gates nothing).
+  Wired into `POST /runlist/push`: the server builds the release detail once (`_release_detail`) and
+  reuses it for the PC→EC deficit (`_pc_ec_deficit(..., detail=...)`). Response carries `skipped`; the UI
+  alerts "N skipped — already at/past the PC/EC op". Filtered `raw` also feeds the deficit so an
+  already-painted container never inflates the PC run qty.
+- **R18 — colour filter default (§6):** `updateColourBtn()` shows the Colour filter unless PC is set to
+  *exclude* (`pcState!==-1`); the chip no longer starts `display:none`; `updateColourBtn()` runs at init.
+- **R19 — Hide-all / Show-any condition filters (§6a):** replaced the four concern-tier hide chips with two
+  coverage-bucket groups — **Hide all** (drop a release only when its *entire* `relBal` is in that bucket)
+  and **Show any** (keep releases with any qty in a selected bucket; multiple = union). Buckets: Past Paint
+  / WIP (paintable) / Pipeline / Short. New `hideAll`/`showAny` sets replace `hideConcern`; saved-view
+  capture/apply updated (legacy `hide` tier-set is dropped silently for back-compat).
+- **R20 — grey elsewhere-allocated containers (§4/§6):** new `allocatedElsewhere` flag on detail container
+  cards. `indexes.alloc_qty_by_serial` = total qty consumed per physical serial across **all** releases;
+  `elsewhere = total − allocatedHere > 0`. UI greys `.ccard.elsewhere` (only when not allocated here) with
+  an "Allocated to another release" tooltip.
+- **R21 — container order (§6):** within each op, cards sorted **allocated-here first, then free, then
+  elsewhere** (stable otherwise) in `build_detail_tree`.
+- **Files:** `paint_dashboard/{indexes,payload,server,ui}.py` + `paint_dashboard/runlists/push.py`.
+- **BUILD-FILE FIX (`build-PaintAllocationDashboard WIP.ps1`):** the `Build-Exe` helper was copying the
+  freshly-built exes to `.\PaintAllocationDashboard\` (the **live** folder) instead of `.\PaintAllocationDashboard WIP\`.
+  Result: rebuilding never updated the exes that actually run from the WIP folder, so the WIP exes stayed at the
+  6/5 build and **none of the R17–R21 changes appeared when running the exe.** Fixed the copy destination to the
+  WIP folder. **Rebuilt all 3 exes (PyInstaller, exit 0)** → WIP folder now has 6/8 14:35–14:36 exes
+  (PaintAllocationDashboard 39.8 MB, PaintRunlistPC/EC 7.6 MB each).
+- **Verified:** `py_compile` (5 modules) + `node --check` on the embedded JS; live run on real data
+  (1561 releases) — detail tree carries `allocatedElsewhere` + here-first ordering; `eligible_items` unit
+  (PC keep A,B,C/skip D,E · EC keep A/skip B–E · sub-routing gated by its own PC op); live
+  `POST /runlist/push` on a real PC release **skipped 6** in/past-PC containers, **added 1** eligible. The
+  draft file was backed up/restored and nothing was published (no lock taken).
+- **Frozen-exe smoke (rebuilt `PaintAllocationDashboard.exe`):** served page contains all R17–R21 markup/JS
+  (colour shown by default · Hide all / Show any chips · old concern chips gone · `.ccard.elsewhere` · skip alert);
+  `/detail` carries `allocatedElsewhere` + here-first ordering; live PC push skipped 6 / added 1. Confirms the
+  changes ship in the binary, not just from source.
+- **⚠ GIT (flagged — NOT changed, it's outside WIP):** root `.gitignore:40 Runlists/` *also* ignores the
+  **source** subpackage `paint_dashboard/runlists/` because Windows `core.ignorecase=true` makes `Runlists/`
+  match `runlists/`. The entire runlists source (model/store/push/reorder/viewer/lock/reconcile/grouping/ui)
+  is therefore **untracked** and won't be committed. Fix the root `.gitignore` before committing (e.g. anchor
+  the runtime ignore or add `!**/paint_dashboard/runlists/` re-includes). Left for the user to approve.
+
 ### 2026-06-05 — Runlist editor: per-pane Clear buttons
 - Added a **Clear** button to each editor pane (PC, EC): empties that target's draft (confirm dialog; floor view
   unaffected until next publish). Backend `POST /runlist/clear {target}` (omit/invalid = both) over the existing

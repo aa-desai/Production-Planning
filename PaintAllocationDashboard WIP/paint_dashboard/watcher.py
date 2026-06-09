@@ -17,6 +17,7 @@ from .state import STATE
 
 WATCH_POLL_SEC = 15       # how often to check the raw-data folders
 WATCH_DEBOUNCE_SEC = 12   # require the mtime to be stable this long before rebuilding
+RECONCILE_HEARTBEAT_SEC = 300  # re-read + reconcile the runlist every 5 min (design §15)
 
 
 def start_watcher() -> None:
@@ -54,3 +55,24 @@ def start_watcher() -> None:
     threading.Thread(target=loop, name="erp-watcher", daemon=True).start()
     log.info("ERP auto-update watcher started (poll %ss, debounce %ss).",
              WATCH_POLL_SEC, WATCH_DEBOUNCE_SEC)
+
+
+def start_reconcile_heartbeat(interval_sec: int = RECONCILE_HEARTBEAT_SEC) -> None:
+    """Background daemon: re-read inventory + reconcile the runlist every *interval_sec*.
+
+    Independent of the ERP watcher (which only fires on a new pull). A periodic
+    ``STATE.refresh()`` re-reads inventory/releases and runs reconciliation, so containers
+    that have been run drop off the floor runlist (and the planner's draft) even when no new
+    ERP files arrived and nobody clicks Refresh. ``STATE.refresh`` is serialised by its own
+    lock, so this never collides with a manual Refresh or the watcher.
+    """
+    def loop():
+        while True:
+            time.sleep(interval_sec)
+            try:
+                STATE.refresh()
+                log.info("Reconcile heartbeat: re-read + reconciled runlist.")
+            except Exception as e:  # noqa: BLE001
+                log.warning("Reconcile heartbeat failed (will retry next tick): %s", e)
+    threading.Thread(target=loop, name="reconcile-heartbeat", daemon=True).start()
+    log.info("Runlist reconcile heartbeat started (every %ss).", interval_sec)

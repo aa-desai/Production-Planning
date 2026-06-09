@@ -154,6 +154,7 @@ Top-level payload also carries `appVersion`, `generatedAt`, `dataPulledAt`, `rel
 **Detail tree (`GET /detail?rid=`, built on demand):** `partNo`, `relBal`, `coverage`,
 `concernAuto`, `ops[]` each with `op`, `seq`, `isPaintOp`, `netQty`, `collapsed`,
 `pastPaintShare`, `containers[]` (`serial`, `location`, `qty`, `allocatedHere`,
+`allocatedElsewhere` (bool — consumed by another release; drives greying, R20),
 `pastPaint`, `addDate`, `containerPlant`, `nextOp`), `reworkCards[]` (display-only),
 and recursive `subRoutings[]` (internal releases, same shape + `consumedAtOp`,
 `bomScaledNet`).
@@ -171,19 +172,45 @@ and recursive `subRoutings[]` (internal releases, same shape + `consumedAtOp`,
 ### 6. UI (settled decisions still in force)
 - Queue: ship-date ASC under **day dividers**; row = concern pip · customer · plant ·
   part(+paint badge) · 4-seg coverage bar · ship date · rel bal · copy-part button.
-- Filters: customer multi-select, tri-state EC/PC, colour multiselect (when PC), "Inventory
-  at P10", four hide-by-condition chips, part search, ship-date range slider, saveable
-  **filter presets** — **personal** (local `localStorage`) **and a shared "common bank"**
-  any planner can publish to (§7a).
+- Filters: customer multi-select, tri-state EC/PC, **colour multiselect (shown by default —
+  hidden only when the PC tri-state is set to *exclude* PC; R18)**, "Inventory at P10", the
+  **Hide-all / Show-any condition filters (§6a, R19)**, part search, ship-date range slider,
+  saveable **filter presets** — **personal** (local `localStorage`) **and a shared "common
+  bank"** any planner can publish to (§7a).
 - Header shows the app **version** (`appVersion`) by the title, plus the "Data Pulled At" chip.
 - Detail: **Stack** (vertical, final op top) / **Flow** (horizontal) toggle, default Stack;
   paint ops tagged; collapsed upstream ops show a pie-style past-paint chip; container cards
   `alloc/total` with past-paint border; 7-field click popover; Rework/MRB condensed to one
   aggregated grey card → breakout modal; sub-routings render inline under the consuming op.
+  **Containers allocated to a *different* release are greyed out (R20)** — visibly de-emphasised
+  (dimmed, "allocated elsewhere" hint) so the planner sees the container exists but it isn't
+  free for this release. **Container order within each op (R21): allocated-here containers
+  first, then any unallocated containers** (so the relevant cards lead; greyed/elsewhere and
+  free containers follow).
 - Theme: **Bold Slate** (slate canvas, deep navy header/accent, vivid coverage colours).
 - Draggable splitter between panes; animated Refresh button.
 - **Removed at v10 (do not reintroduce in Part 1):** per-release overrides, `overrides\`
   folder, `concernManual`, concern-cycling, conflict banners, the "manual" pip.
+
+### 6a. Queue condition filters — Hide-all vs. Show-any (V2 refinement, R19)
+The old four "hide-by-condition" chips keyed on a release's single `concernAuto` tier. They
+are replaced by **two parallel filter groups**, both keyed on the release's **coverage
+buckets** (§5: `pastPaint` / `paintable` = **WIP** / `pipeline` / `short`), so the planner can
+slice on what the allocation actually contains rather than on the rolled-up concern tier:
+
+- **Hide all `<condition>`** — hides a release only when the **entire release** meets that
+  condition, i.e. **100 %** of `relBal` sits in that one bucket (e.g. *Hide all Past Paint*
+  drops releases that are fully covered past paint; *Hide all Pipeline* drops releases whose
+  whole balance is still upstream). A partially-covered release is **kept**.
+- **Show any `<condition>`** — narrows the queue to releases where **any** allocation meets the
+  condition, i.e. that bucket is **> 0** (e.g. *Show any WIP* surfaces every release with at
+  least one container sitting at the paint op). With several "Show any" conditions selected, a
+  release shows if it matches **any** of them (union); each active "Hide all" then removes the
+  fully-matching releases from that set.
+
+Conditions exposed in both groups: **Past Paint, WIP (paintable), Pipeline** (and **Short /
+Empty pipeline** as the natural fourth). The two groups are visually distinct (a "Hide all…"
+row and a "Show any…" row) and combine with all other filters by AND.
 
 ### 7. Config, snapshot, watcher, distribution
 - **Config** `paint_allocation_dashboard.ini` (optional; zero-config otherwise). Keys:
@@ -205,6 +232,13 @@ and recursive `subRoutings[]` (internal releases, same shape + `consumedAtOp`,
   `build-PaintAllocationDashboard.ps1` (scratch dirs outside OneDrive; `--collect-all
   python_calamine`). Launched via `Launch Paint Allocation Dashboard.bat` (`%~dp0`
   self-relative). Frozen exe resolves files beside itself, not PyInstaller's `_MEIPASS`.
+- **Logging & crash diagnostics.** Logs go to the console **and** a rotating file `<ProgramName>.log`
+  (2 MB × 5) beside the exe — per-program name so the planner + 2 viewers don't share one file. A
+  `faulthandler` dump file `<ProgramName>_fault.log` captures **native** crashes (a C-level fault in
+  pandas/numpy/calamine) that bypass Python and would otherwise close the window with no trace.
+  `sys.excepthook` + `threading.excepthook` persist uncaught main- and worker-thread tracebacks, and the
+  HTTP server logs per-request handler errors (`DashboardServer.handle_error`). To investigate a crash,
+  reproduce it then read the `.log` (Python errors) and `_fault.log` (native dump).
 
 ### 7a. Saved views — personal + shared bank (V2)
 Saved filter views come in two scopes:
@@ -256,10 +290,29 @@ queued for — drives reconciliation), `source` (`manual` / `auto-ec-deficit`), 
 - `runlist_owner.lock` — shared lock/heartbeat (§14).
 
 ### 11. Selection & push (planner)
-- Selection affordances (checkboxes) on **releases** and on **container cards** in the
-  detail pane. Selecting a release auto-selects its current allocation (containers with
-  `allocatedHere > 0`).
+- **Two complementary selection scopes:**
+  - **Whole releases** — a checkbox on every **Release Queue** row (`RELSEL`, ordered by tick
+    order). Each ticked checkbox shows its **selection-order number**; the row body still loads
+    the detail on click. A ticked release means its **full required allocation** (every container
+    with `allocatedHere > 0`, at that qty — identical to "Select allocation").
+  - **Individual containers** — the existing per-container checkboxes/qty popup in the detail
+    pane (`RUNSEL`, current release only). Kept intact for fine-grained control.
+- The selection + push controls (**Select allocation**, count, **Push → PC/EC**, draft count,
+  **Publish**) live in the **Selected Release** header, directly under the title.
+- **Push acts on everything selected at once, in selection order:** each ticked release is pushed
+  (in tick order) as its own per-release push, then the viewed release's ticked containers (only if
+  that release isn't itself ticked — releases take precedence to avoid double-counting). Pushing
+  per release preserves the engine's per-release cascade (§12) + PC→EC deficit (§13). Skipped/added
+  totals are summed and surfaced via a toast.
 - Two buttons: **Push to PC runlist**, **Push to EC runlist** (separate).
+- **Eligibility by paint op (R17).** A push only takes containers that still **need** the op
+  in question — i.e. whose current position is **upstream of** the target paint op. **Push to
+  PC** silently drops any selected container that is **in or past a PC op** (it has already
+  been — or is currently being — powdercoated); **Push to EC** drops any container **in or
+  past an EC op**. Position is judged by the container's node `seq` vs. the branch's EC/PC op
+  `seq` (the same `last_paint_seq`/op-seq predicate §5 uses), so an already-painted container
+  can never be queued to repaint. Dropped containers are reported back ("N skipped — already
+  at/past that op") rather than silently vanishing.
 - Push appends `RunItem`s to the **draft** (not live).
 
 **Quantity popup — Required / Entire / Manual.** **Trigger: any engine-partial container**
@@ -291,8 +344,14 @@ Only for branches that have **both** an EC and a PC op (EC then PC). When PC is 
   Confirm/auto-publish (the colour-coding is the review gate).
 
 ### 14. Lock owner / heartbeat (single-writer guarantee)
-- `runlist_owner.lock` holds `{machine, user, pid, acquiredAt, heartbeatAt}`.
+- `runlist_owner.lock` holds `{machine, user, pid, instance, acquiredAt, heartbeatAt}`.
 - The owner rewrites `heartbeatAt` every **10 minutes**.
+- **Ownership is per *planner identity* (machine + user), not per process (R22).** The `instance`
+  token distinguishes processes for heartbeat bookkeeping, but the *blocking* decision keys on
+  machine+user: **another of your own processes on your own machine (a relaunch, a second window)
+  reclaims the lock immediately** — no missed-heartbeat wait. Only a *different* machine/user can
+  block you. This removes the "can't publish — owned by yourself" deadlock that the per-process
+  UUID caused when a planner reopened the dashboard while an old window was still heartbeating.
 - **Takeover is event-driven, not polled:** when a non-owner instance attempts an authoring /
   publish action, it checks the lock. If the owner's `heartbeatAt` is older than one interval
   plus grace (a **missed heartbeat**), the contender runs a short **missed-heartbeat
@@ -301,25 +360,59 @@ Only for branches that have **both** an EC and a PC op (EC then PC). When PC is 
   the second instance stays **read-only** (can author a draft, cannot publish) until takeover.
 - Only the lock owner may write `runlist_live.json`.
 
-### 15. Reconciliation on planner refresh (auto-remove what was run)
-Run inside `AppState.refresh()`, **before** the payload swap; reconciled draft is then
-republished (Confirm / auto-publish). Per `RunItem` (keyed by `serial`):
-- **Fully run** — container is now **past the queued paint op** (`node.seq ≥ queuedPaintSeq`)
-  or its serial is gone at/before that op → remove from the runlist, append to history.
-- **Partially run** — container still present but its on-hand qty at the queued op dropped →
-  **reduce the item's run qty** to the new remaining; keep it on the list.
+### 15. Reconciliation on refresh + 5-min heartbeat (auto-remove what was run)
+Runs inside `AppState.refresh()` (`_reconcile_runlist`), **after** the payload swap; if we
+hold the lock the reconciled draft is republished to `runlist_live.json`. It runs on **every**
+data read: the manual **Refresh** button, the ERP auto-update watcher, **and** a dedicated
+**5-minute reconcile heartbeat** (`watcher.start_reconcile_heartbeat`, started in `app.main`)
+that re-reads inventory/releases and reconciles even with nobody clicking Refresh and no new
+ERP pull. Per `RunItem` (keyed by `serial`):
+- **Run (removed)** — the container has reached **the last paint op of this list's target on
+  its own routing**: for an **EC** item, `node.seq ≥ last EC-op seq`; for a **PC** item,
+  `node.seq ≥ last PC-op seq` (per-part maps from `reconcile.build_last_paint_seqs`, mirroring
+  the app-wide "past last paint" `≥` test). Also removed if the serial is gone from inventory
+  or its on-hand qty is 0. Removed serials are reported (`report[t]["removedSerials"]`).
+- **Partially run** — container still present but its on-hand qty dropped below the run qty →
+  **reduce the item's run qty** to what's left; keep it on the list.
 - A **release stays on the list until its balance is met** — never drop a whole release just
   because one of its containers ran.
+- **Reflected everywhere with a leave animation:** the floor PC/EC pages and the planner's open
+  reorder editor fade/slide removed rows out before re-rendering (§16/§17); the planner runbar
+  draft counts poll so removals show even with the editor closed.
 
-### 16. Reorder tab (planner) + publish
-- A new planner tab renders the **draft** runlists (PC nested colour→release→container,
-  EC list) with **full drag-and-drop** reordering at every level — the planner has total
-  control of run order.
-- Auto-added EC items are colour-coded with the review notification (§13).
-- **Confirm** publishes the draft → `runlist_live.json` (atomic; requires lock ownership).
-- **Auto-publish every 10 minutes** while the reorder tab is open (safety net).
-- Each pane (PC, EC) has its own **Clear** button to empty that target's draft (with confirm);
-  clears the draft only — the floor view is unaffected until the next publish.
+### 16. Reorder editor (planner) + publish
+- The editor renders the **draft** runlists with **drag-and-drop** reordering. The flat item
+  order per target is the source of truth (persisted via `/runlist/reorder`); **group headers
+  are derived from that order on every render** — **PC groups by colour → part, EC groups by
+  part**.
+- **Grouped drag (free placement):** dragging a container moves it anywhere; on drop the order
+  is re-read and **headers are recomputed by consecutive run** (a container dropped among a
+  different group gets its own header there — no header/colour mismatch). Dragging a **group
+  header moves its whole chunk** (a colour header carries its part sub-chunks; a part header
+  carries its containers).
+- **Make-space animation:** during a drag the other rows FLIP-animate to open/close the gap
+  (`flip()` records rects, moves, then transitions transform→0).
+- **Reset to live:** each pane (PC, EC) has a **Reset** button that reverts that target's draft
+  to the live published list (`/runlist/reset` → `push.reset_to_live`), discarding unpublished
+  edits. Each pane also keeps its **Clear** button (empty the draft; floor unaffected until publish).
+- **Item rows show Serial · Location · Qty only** — the part number is shown once, in the group
+  header (PC part sub-header / EC part header), not repeated on every container row.
+- **Collapsible groups:** click any group header (colour or part) to collapse/expand its chunk
+  (a large caret pip with a 26 px hit target + hover halo rotates; the caret and drag-handle
+  glyphs are forced to legible colours on the dark navy colour header). Collapsed rows stay in the
+  DOM as `ehide` (display:none) so a header drag
+  still carries them and order is never lost; state lives in `COLL` (per-list key sets) and
+  survives re-renders. A post-drag click is suppressed so dragging never also toggles.
+- **Acknowledging auto-added EC:** each auto-added EC container (amber) carries a **checkmark**;
+  clicking it `POST /runlist/ack {runItemId, acknowledged:true}` sets the item's `acknowledged` flag
+  on the draft, clearing the amber and decrementing the “⚠ N auto-added EC — review” banner. Once
+  acknowledged the checkmark is **removed entirely** — no residual indicator (the row becomes a
+  plain container). Only unacknowledged auto-added items show the checkmark.
+- **Confirm** publishes the draft → `runlist_live.json` (atomic; requires lock ownership —
+  **except** the very first publish: when no `runlist_live.json` exists yet there is no floor
+  view to protect, so `push.publish` `lock.seize()`s outright rather than letting a stale/foreign
+  lock block getting started). **Auto-publish every 10 minutes** while open (safety net). While
+  open the editor also polls the draft (20 s) so §15 reconcile removals animate out in place.
 - Published order is what the floor views render.
 
 ### 17. Floor views
@@ -327,7 +420,23 @@ republished (Confirm / auto-publish). Per `RunItem` (keyed by `serial`):
   Qty), in published order.
 - **EC view:** flat ordered container list (same four fields).
 - Each polls `runlist_live.json` (~10–15 s) and re-renders; completed containers disappear
-  because the planner republishes the reconciled list. Read-only.
+  because the planner (or the 5-min heartbeat, §15) republishes the reconciled list. Rows that
+  vanished since the last render **fade/slide out** (`animateThenRender` diffs `data-serial`
+  before swapping the table). Read-only.
+
+### 18a. Toast notifications
+- Transient overlay messages (`#toasts` top-right, `toast(msg,type)`; types `ok`/`warn`/`err`) that
+  **auto-dismiss** (~4.5 s) with no click. Used for the **skipped-on-push** notice (containers already
+  at/past the target paint op) — previously a blocking `alert()`. Hard-failure paths (push/publish
+  errors) still use `alert()` so they can't be missed.
+
+### 18b. Universal button UX
+- **Click feedback (all buttons/chips):** a quick press dip (`transform`/inset shadow) on
+  `.btn`, `.chip`, `.hchip`, `.copybtn`, the Stack/Flow toggle, and editor rows.
+- **Loading buttons:** every async-action button (Rebuild graph, Push→PC/EC, Publish, editor
+  Save/Confirm/Clear/Reset) routes through `btnRun()` — a spinner + verb label while the
+  promise runs, then a brief green ✓ "done" / red ✕ "fail" state before reverting — matching
+  the Refresh button's feel.
 
 ### 18. Packaging / build
 - **Three entry scripts → three exes, one bat each** (independent launch per view):
@@ -400,6 +509,16 @@ dependency on `..\Python Script\`; `inventory_to_release_allocation` is no longe
 | R14 | Graph rebuild = **daily + a manual "Rebuild graph" button**; mid-day routing/BOM changes are not auto-detected. |
 | R15 | **Viewer exes are stdlib-only** (no pandas/engine); all exes kept as light as possible. |
 | R16 | **Heartbeat = 10 min**; takeover **event-driven** with a **missed-heartbeat confirmation** before seizing the lock. |
+
+### Refinements (2026-06-08; design only — not yet built)
+| # | Decision |
+|---|---|
+| R17 | **Push eligibility by op (§11):** never push a container that is **in or past** the target paint op — PC push drops containers in/past any PC op, EC push drops containers in/past any EC op (judged by node `seq` vs. the EC/PC op `seq`). Skipped count is reported. |
+| R18 | **Colour filter shown by default (§6);** hidden only when the PC tri-state is set to **exclude** PC. |
+| R19 | **Queue condition filters → two groups (§6a):** **Hide all `<cond>`** (hide releases whose *entire* balance is in that coverage bucket) and **Show any `<cond>`** (show releases where that bucket is `> 0`); conditions = Past Paint / WIP (paintable) / Pipeline / Short. |
+| R20 | **Selected-release detail greys out containers allocated to other releases** (`allocatedElsewhere` flag, §4). |
+| R21 | **Container order within each op:** allocated-here first, then unallocated. |
+| R22 | **Runlist lock is per planner identity (machine+user), not per process (§14):** your own other processes reclaim it immediately; only a different machine/user blocks. Fixes the "owned by yourself" publish deadlock. |
 
 ## 22. Open items
 **Resolved this round:** OneDrive sync latency accepted (documented). Manual-qty distribution

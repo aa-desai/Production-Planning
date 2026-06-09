@@ -128,16 +128,22 @@ def build_queue_payload(result: PipelineResult, idx: Indexes) -> dict:
 
 
 # ---- on-demand detail tree (design §3.2, §4.2, §4.4) ----------------------
-def _container_card(c: "ga.Container", node: "ga.Node", alloc_rows_by_serial: dict) -> dict:
+def _container_card(c: "ga.Container", node: "ga.Node", alloc_rows_by_serial: dict,
+                    alloc_total_by_serial: dict) -> dict:
     serial = str(c.serial)
-    allocated_here = alloc_rows_by_serial.get(serial, 0)
+    allocated_here = int(alloc_rows_by_serial.get(serial, 0))
+    # "Allocated elsewhere" = this physical container is consumed by some OTHER release
+    # (its total allocation across all releases exceeds what this release takes here). Drives
+    # the greying in the selected-release view (R20).
+    allocated_total = int(alloc_total_by_serial.get(serial, 0))
     past = ga_is_past_last_paint(node.part, node.seq)
     return {
         "serial": serial,
         "part": c.part,
         "location": str(c.location),
         "qty": int(c.quantity),
-        "allocatedHere": int(allocated_here),
+        "allocatedHere": allocated_here,
+        "allocatedElsewhere": bool(allocated_total - allocated_here > 0),
         "pastPaint": bool(past),
         "addDate": _jsonsafe(c.add_date),
         "containerPlant": str(c.container_plant),
@@ -196,7 +202,12 @@ def build_detail_tree(result: PipelineResult, idx: Indexes, release_id: int,
         op = str(n.operation)
         is_paint = ("EC" in op) or ("PC" in op)
         serial_alloc = alloc_by_op_serial.get(op, {})
-        cards = [_container_card(c, n, serial_alloc) for c in n.containers]
+        cards = [_container_card(c, n, serial_alloc, idx.alloc_qty_by_serial)
+                 for c in n.containers]
+        # Order within the op: allocated-to-this-release first, then free (unallocated),
+        # then containers allocated to other releases (greyed) last — stable otherwise (R21).
+        cards.sort(key=lambda c: (0 if c["allocatedHere"] > 0 else 1,
+                                  1 if c["allocatedElsewhere"] else 0))
         # rework/mrb display-only
         rwk = idx.rework_by_partop.get((part, op), [])
         rework_cards = [{
@@ -205,6 +216,7 @@ def build_detail_tree(result: PipelineResult, idx: Indexes, release_id: int,
             "location": str(x.get("Location", "")),
             "qty": int(x.get("Quantity") or 0),
             "allocatedHere": 0,
+            "allocatedElsewhere": False,
             "pastPaint": False,
             "addDate": _jsonsafe(x.get("Add Date")),
             "containerPlant": str(x.get("Container Plant", "")),

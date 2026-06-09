@@ -22,6 +22,7 @@ class Indexes:
     internal_to_top: dict          # any release id -> top-level external release id
     alloc_by_top: dict             # top id -> list of alloc row dicts
     alloc_by_relid: dict           # exact Release ID -> list of alloc row dicts
+    alloc_qty_by_serial: dict      # serial -> total allocated qty across ALL releases (R20)
     rework_by_partop: dict         # (part, op) -> list of rework/mrb row dicts
     swatch_map: dict
     ext_by_id: dict                # external Release ID -> release row dict
@@ -47,7 +48,11 @@ def build_indexes(result: PipelineResult) -> Indexes:
     alloc = result.alloc_df
     alloc_by_top: dict = defaultdict(list)
     alloc_by_relid: dict = defaultdict(list)
+    alloc_qty_by_serial: dict = defaultdict(int)
     for row in alloc.to_dict("records"):
+        # Total qty consumed per physical container, across every release — drives the
+        # "allocated to another release" greying in the detail pane (R20).
+        alloc_qty_by_serial[str(row.get("Serial No"))] += int(row.get("Allocated Qty") or 0)
         rid = row.get("Release ID")
         if rid is None or (isinstance(rid, float) and pd.isna(rid)):
             continue
@@ -69,6 +74,7 @@ def build_indexes(result: PipelineResult) -> Indexes:
         internal_to_top=internal_to_top,
         alloc_by_top=dict(alloc_by_top),
         alloc_by_relid=dict(alloc_by_relid),
+        alloc_qty_by_serial=dict(alloc_qty_by_serial),
         rework_by_partop=dict(rework_by_partop),
         swatch_map=load_swatch_map(),
         ext_by_id=ext_by_id,

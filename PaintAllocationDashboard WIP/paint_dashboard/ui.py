@@ -76,6 +76,8 @@ body.resizing{cursor:col-resize!important;user-select:none}
 .hchip i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
 .hchip.on{background:#f0f1f5;color:var(--muted);text-decoration:line-through;border-color:#cdd2db}
 .hchip.on i{opacity:.4}
+.hchip.show.on{background:var(--accent);color:#fff;border-color:var(--accent);text-decoration:none}
+.hchip.show.on i{opacity:1}
 .pbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600}
 .pbadge .ec{background:#e7f0ff;color:#1554c0;border:1px solid #bcd2f7;border-radius:4px;padding:1px 5px}
 .swatch{min-width:21px;width:auto;height:16px;padding:0 4px;border-radius:3px;border:1px solid rgba(0,0,0,.28);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;white-space:nowrap}
@@ -101,7 +103,15 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 /* Shrinkable tracks (minmax(0,…)) so the row always fits the pane — otherwise,
    once the vertical scrollbar narrows the body, the fixed columns overflow and the
    selection highlight (which only paints to the row's box) stops short of the date/qty. */
-.qrow{display:grid;grid-template-columns:18px minmax(0,84px) 30px minmax(56px,1fr) minmax(38px,64px) 60px minmax(40px,auto);align-items:center;gap:7px;padding:8px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent;min-width:0;overflow:hidden}
+.qrow{display:grid;grid-template-columns:26px 18px minmax(0,84px) 30px minmax(56px,1fr) minmax(38px,64px) 60px minmax(40px,auto);align-items:center;gap:7px;padding:8px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent;min-width:0;overflow:hidden}
+/* Queue multi-select: a checkbox + a selection-order badge per release row. */
+.relselbox{position:relative;display:inline-flex;align-items:center;justify-content:center;width:26px;height:22px;flex:0 0 auto}
+.relselbox .relbox{width:16px;height:16px;cursor:pointer;margin:0;accent-color:var(--accent)}
+.relselbox .relnum{position:absolute;top:-5px;right:-3px;min-width:14px;height:14px;padding:0 3px;border-radius:8px;
+ background:var(--accent);color:#fff;font-size:9px;font-weight:800;line-height:14px;text-align:center;pointer-events:none;
+ box-shadow:0 1px 2px rgba(11,20,31,.3)}
+.relselbox .relnum:empty{display:none}
+.qrow.relsel{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
 .qrow .plant{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center}
 .qrow:hover{background:var(--accent-soft)}.qrow.sel{background:var(--accent-soft);border-color:var(--accent);border-left:4px solid var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .qrow .cust{color:var(--muted);font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -152,6 +162,7 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 .fstage .fname{font-weight:700;font-size:12px}.fstage .fnet{font-family:var(--mono);color:var(--accent);font-size:11px;margin:1px 0 6px}
 .fmini{border:1px solid var(--line);border-radius:6px;margin:3px 0;padding:3px 6px;font-size:10.5px;font-family:var(--mono);background:#fff;cursor:pointer}
 .fmini.past{border-left:4px solid var(--c-past)}.fmini.mrb{background:#e9eaee;color:#7b8090;font-style:italic;cursor:default}
+.fmini.elsewhere{opacity:.45}.fmini.elsewhere:hover{opacity:.7}
 .fbranch{margin-top:8px;border-top:1px dashed #b9c0cc;padding-top:6px}.fbranch .bl{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:4px;font-family:var(--mono)}
 #pop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,24,32,.4);z-index:100}
 #pop.show{display:flex}#pop .box{background:#fff;border-radius:12px;padding:16px 18px;min-width:310px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
@@ -193,6 +204,8 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 .ccard .selbox{position:absolute;top:6px;left:6px;margin:0;width:15px;height:15px;cursor:pointer;z-index:2}
 .ccard .cardmain{cursor:pointer;padding-left:14px}
 .ccard.sel{outline:2px solid var(--accent);background:var(--accent-soft)}
+.ccard.elsewhere{opacity:.45;background:#f4f5f8;border-left-color:#c3c8d2}
+.ccard.elsewhere:hover{opacity:.7}.ccard.elsewhere .qty{color:var(--muted)}
 #qtypop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,24,32,.4);z-index:120}
 #qtypop.show{display:flex}
 #qtypop .box{background:#fff;border-radius:12px;padding:16px 18px;min-width:300px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
@@ -200,6 +213,64 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 #qtypop .qbtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .qrow2{display:flex;gap:6px;align-items:center;margin-top:4px}
 .qrow2 input{width:90px;padding:5px 8px;border:1px solid var(--line);border-radius:6px}
+/* --- (2.1) Universal click feedback: every button/chip dips on press --- */
+.btn,.chip,.hchip,.copybtn,.eitem,.seg button{transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease,transform .07s ease}
+.btn:active{transform:translateY(1px) scale(.985)}
+.chip:active,.hchip:active,#viewtoggle button:active{transform:scale(.93)}
+.copybtn:active{transform:scale(.88)}
+.btn:active,.chip:active{box-shadow:inset 0 1px 3px rgba(11,20,31,.18)}
+/* --- (2.2) Generic loading buttons (match the Refresh button's feel) --- */
+.btn.busy,.btn.bdone,.btn.bfail{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.busy{opacity:.96;cursor:default}
+.btn.bdone{background:var(--c-past)!important;color:#fff!important;border-color:var(--c-past)!important}
+.btn.bfail{background:var(--c-short)!important;color:#fff!important;border-color:var(--c-short)!important}
+.bspin{width:12px;height:12px;border-radius:50%;border:2px solid rgba(39,69,126,.30);border-top-color:var(--accent);
+ animation:rspin .62s linear infinite;display:inline-block;flex:0 0 auto}
+.btn.rpush .bspin,.btn.rpub .bspin{border-color:rgba(255,255,255,.45);border-top-color:#fff}
+/* --- (2.3/2.4) Reorder editor: group headers, drag ghost + make-space animation --- */
+.ehdr{display:flex;align-items:center;gap:8px;padding:5px 9px;margin:8px 0 3px;border-radius:7px;cursor:grab;
+ user-select:none;font-weight:700;transition:transform .18s ease,box-shadow .15s ease,opacity .2s ease}
+.ehdr:active{cursor:grabbing}
+.ehide{display:none}
+/* Collapse pip: large glyph + a generous square hit target with a hover halo. */
+.ehdr .caret{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin:-3px 0 -3px -2px;
+ font-size:17px;line-height:1;border-radius:6px;transition:transform .15s ease,background-color .15s ease;cursor:pointer}
+.ehdr .caret:hover{background:rgba(11,20,31,.14)}
+.ehdr.collapsed .caret{transform:rotate(-90deg)}
+.ehdr .ghandle{color:var(--faint);font-size:15px;line-height:1;letter-spacing:-1px}
+/* Keep both icons legible on the dark navy colour header. */
+.ehdr.colhdr .caret{color:#fff}
+.ehdr.colhdr .caret:hover{background:rgba(255,255,255,.24)}
+.ehdr.colhdr .ghandle{color:rgba(255,255,255,.82)}
+.ehdr.parthdr .caret,.ehdr.parthdr .ghandle{color:var(--accent)}
+.ehdr .ecount{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:11.5px;opacity:.85}
+.ehdr.colhdr{background:var(--navy);color:#fff;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+.ehdr.colhdr .gsw{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.55);flex:0 0 auto}
+.ehdr.parthdr{background:var(--panel-3);color:var(--accent);font-family:var(--mono);font-size:12px;margin-left:14px}
+.ehdr.parthdr.econly{margin-left:0}
+.elist .eitem{margin-left:26px;transition:transform .18s ease,opacity .22s ease,box-shadow .15s ease,background-color .15s ease}
+.elist .eitem.econly{margin-left:14px}
+.eitem.drag,.ehdr.drag{opacity:.45;box-shadow:0 6px 16px rgba(11,20,31,.22)}
+.elist.dragging .eitem,.elist.dragging .ehdr{cursor:grabbing}
+.eitem.removing,.ehdr.removing{opacity:0;transform:translateX(26px);background:#fde8e8;border-color:#f3b4b4}
+.eitem .eack{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:22px;height:20px;
+ padding:0;margin-left:8px;border:1px solid var(--line);background:#fff;color:var(--faint);border-radius:5px;cursor:pointer}
+.eitem .eack:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.eitem.auto .eack{border-color:#e0b651;color:#9a6b00}
+.eitem.auto .eack:hover{background:#fff;border-color:var(--c-past);color:var(--c-past)}
+#editor .ecolhead .edreset{font-weight:600;color:var(--accent);border-color:var(--line)}
+#editor .ecolhead .edreset:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Toast notifications: transient overlay messages that auto-dismiss (no click needed). */
+#toasts{position:fixed;top:60px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px;
+ max-width:340px;pointer-events:none}
+.toast{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);
+ border-radius:8px;padding:9px 12px 9px 11px;font-size:12.5px;line-height:1.35;color:var(--ink);
+ box-shadow:0 6px 18px rgba(11,20,31,.22);opacity:0;transform:translateX(18px);
+ transition:opacity .25s ease,transform .25s ease}
+.toast.show{opacity:1;transform:none}
+.toast.warn{border-left-color:var(--c-pipe)}
+.toast.err{border-left-color:var(--c-short)}
+.toast.ok{border-left-color:var(--c-past)}
 </style></head><body>
 <header class="app">
   <span class="logo">Paint Allocation Dashboard <small id="appver"></small></span>
@@ -231,13 +302,21 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
           <span class="chip" id="custBtn">+ Customer</span>
           <span class="chip" id="ecChip" data-p="EC">EC</span>
           <span class="chip" id="pcChip" data-p="PC">PC</span>
-          <span class="chip" id="colourBtn" style="display:none">Colour &#9662;</span>
+          <span class="chip" id="colourBtn">Colour &#9662;</span>
           <span class="chip" id="invP10Chip" title="Hide P6 releases that have no inventory anywhere in their routing at P10">Inventory at P10</span>
-          <span class="hidegrp" title="Click a condition to hide those releases">
-            <span class="hchip" data-k="good"   title="green &middot; fully covered (past paint)"><i style="background:var(--t-good)"></i>Hide Past Paint</span>
-            <span class="hchip" data-k="low"    title="yellow &middot; paintable / WIP only"><i style="background:var(--t-low)"></i>Hide WIP only</span>
-            <span class="hchip" data-k="medium" title="orange &middot; pipeline only"><i style="background:var(--t-med)"></i>Hide Pipeline only</span>
-            <span class="hchip" data-k="high"   title="red &middot; empty pipeline / short"><i style="background:var(--t-high)"></i>Hide Empty Pipeline</span>
+          <span class="hidegrp" title="Hide releases whose ENTIRE balance sits in this bucket">
+            <span class="hlbl">Hide all</span>
+            <span class="hchip" data-grp="hide" data-k="pastPaint" title="hide releases fully covered past paint"><i style="background:var(--c-past)"></i>Past Paint</span>
+            <span class="hchip" data-grp="hide" data-k="paintable" title="hide releases whose whole balance is at the paint op"><i style="background:var(--c-paint)"></i>WIP</span>
+            <span class="hchip" data-grp="hide" data-k="pipeline"  title="hide releases whose whole balance is still upstream"><i style="background:var(--c-pipe)"></i>Pipeline</span>
+            <span class="hchip" data-grp="hide" data-k="short"     title="hide releases that are entirely short / empty pipeline"><i style="background:var(--c-short)"></i>Short</span>
+          </span>
+          <span class="hidegrp" title="Show only releases where ANY allocation is in this bucket">
+            <span class="hlbl">Show any</span>
+            <span class="hchip show" data-grp="show" data-k="pastPaint" title="any qty past paint"><i style="background:var(--c-past)"></i>Past Paint</span>
+            <span class="hchip show" data-grp="show" data-k="paintable" title="any qty at the paint op (WIP)"><i style="background:var(--c-paint)"></i>WIP</span>
+            <span class="hchip show" data-grp="show" data-k="pipeline"  title="any qty in the pipeline"><i style="background:var(--c-pipe)"></i>Pipeline</span>
+            <span class="hchip show" data-grp="show" data-k="short"     title="any short / empty"><i style="background:var(--c-short)"></i>Short</span>
           </span>
           <input class="search" id="search" placeholder="part #&hellip;">
           <span class="spacer"></span><span id="count" style="font-size:11px;color:var(--muted)"></span>
@@ -268,18 +347,18 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
   <div class="pane">
     <div class="pane-head headbar"><h3>Selected Release</h3><span class="spacer"></span>
       <div class="seg" id="viewtoggle"><span class="thumb"></span><button data-v="stack" class="on">&#9636; Stack</button><button data-v="flow">&#9655; Flow</button></div></div>
-    <div class="detailhead" id="detailhead"><span class="meta">Select a release&hellip;</span></div>
     <div class="runbar" id="runbar" style="display:none">
-      <button class="btn" id="selAlloc" title="Select this release's allocated containers">Select allocation</button>
+      <button class="btn" id="selAlloc" title="Select the viewed release's allocated containers">Select allocation</button>
       <span id="selCount" class="rcount">0 selected</span><span class="spacer"></span>
-      <button class="btn rpush pc" id="pushPC">Push &rarr; PC</button>
-      <button class="btn rpush ec" id="pushEC">Push &rarr; EC</button>
+      <button class="btn rpush pc" id="pushPC" title="Push everything selected (checked releases + ticked containers) to PC, in selection order">Push &rarr; PC</button>
+      <button class="btn rpush ec" id="pushEC" title="Push everything selected (checked releases + ticked containers) to EC, in selection order">Push &rarr; EC</button>
       <span class="rdiv"></span>
       <span id="draftCount" class="rcount" title="Draft runlist (not yet published)">draft: pc 0 &middot; ec 0</span>
       <button class="btn rpub" id="publishBtn" title="Publish the draft to the floor runlists">Publish</button>
       <span id="lockInfo" class="rlock"></span>
       <span id="ecNotice" class="ecnote" style="display:none"></span>
     </div>
+    <div class="detailhead" id="detailhead"><span class="meta">Select a release&hellip;</span></div>
     <div class="pane-body" id="detailStack"></div>
     <div class="flowwrap" id="detailFlow" style="display:none"><div class="flowline" id="flowline"></div></div>
   </div>
@@ -298,16 +377,19 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
     <button class="btn rpub" id="edPublish">Confirm &amp; Publish</button>
     <button class="btn" id="edClose">Close</button></div>
   <div class="ebody">
-    <div class="ecol"><div class="ecolhead"><span>PC runlist &mdash; drag to reorder</span><button class="btn edclear" id="clearPC" title="Remove all PC items from the draft">Clear</button></div><div class="elist" id="edPC"></div></div>
-    <div class="ecol"><div class="ecolhead"><span>EC runlist &mdash; drag to reorder</span><button class="btn edclear" id="clearEC" title="Remove all EC items from the draft">Clear</button></div><div class="elist" id="edEC"></div></div>
+    <div class="ecol"><div class="ecolhead"><span>PC runlist &mdash; drag to reorder</span><button class="btn edreset" id="resetPC" title="Discard unpublished edits — revert PC to the live floor list">Reset to live</button><button class="btn edclear" id="clearPC" title="Remove all PC items from the draft">Clear</button></div><div class="elist" id="edPC"></div></div>
+    <div class="ecol"><div class="ecolhead"><span>EC runlist &mdash; drag to reorder</span><button class="btn edreset" id="resetEC" title="Discard unpublished edits — revert EC to the live floor list">Reset to live</button><button class="btn edclear" id="clearEC" title="Remove all EC items from the draft">Clear</button></div><div class="elist" id="edEC"></div></div>
   </div>
   <div class="ehint">Auto-added EC (amber) come from PC&rarr;EC deficit &mdash; review before publishing. Order drives the floor view. Auto-publishes every 10&nbsp;min while open.</div>
 </div></div>
+<div id="toasts" aria-live="polite"></div>
 <script>
 let PAYLOAD = __PAYLOAD__;
 let SEL = null, VIEW = 'stack', custFilter = new Set(), colourFilter = new Set();
 let RUNSEL = new Map();                   // serial -> {qty} selected for the runlist (current release)
-let hideConcern = new Set();             // concern levels to hide: good/low/medium/high
+let RELSEL = new Map();                   // releaseId -> release meta; whole releases ticked in the queue (ordered)
+let hideAll = new Set();                 // coverage buckets to hide when the WHOLE release is in them
+let showAny = new Set();                 // coverage buckets a release must have ANY qty in (union)
 let ecState = 0, pcState = 0;            // 0=off, 1=require, -1=exclude
 let invP10 = false;                      // hide P6 releases with no P10 inventory in their routing
 let DATES = [], dLo = 0, dHi = 0;        // ship-date range slider (indices into DATES)
@@ -328,8 +410,39 @@ function pieStyle(s){if(s>=1)return 'background:var(--c-past)';if(s<=0)return 'b
 // Universal "content_copy" icon (two overlapping pages).
 const COPY_ICON='<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M15.5 1h-11A1.5 1.5 0 0 0 3 2.5V16h2V3h10.5V1zm3 4h-9A1.5 1.5 0 0 0 8 6.5v15A1.5 1.5 0 0 0 9.5 23h9A1.5 1.5 0 0 0 20 21.5v-15A1.5 1.5 0 0 0 18.5 5zM18 21H10V7h8v14z"/></svg>';
 const CHECK_ICON='<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.4l3.2 3.2L13 4.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const X_ICON='<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
 // Refresh-button icons: spinner ring, and a check-in-a-circle for "Refreshed".
 const SPINNER='<span class="spin"></span>';
+
+// Transient notification overlay — appears, then auto-dismisses (no click needed).
+// type: '' | 'ok' | 'warn' | 'err'.
+function toast(msg,type,ms){
+ const wrap=$('#toasts'); if(!wrap)return;
+ const t=document.createElement('div'); t.className='toast '+(type||''); t.textContent=msg;
+ wrap.appendChild(t); requestAnimationFrame(()=>t.classList.add('show'));
+ setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);}, ms||4500);
+}
+
+// (2.2) Generic loading button: spinner + label while *factory()* runs, then a brief
+// green "done" / red "fail" state, before reverting to the original content. Mirrors the
+// Refresh button's feedback for every async action button.
+function btnRun(btn,label,factory,opts){
+ opts=opts||{};
+ if(!btn||btn._busy)return; btn._busy=true;
+ const html=btn.innerHTML;
+ btn.disabled=true; btn.classList.remove('bdone','bfail'); btn.classList.add('busy');
+ btn.innerHTML='<span class="bspin"></span>'+(label||'');
+ Promise.resolve().then(factory).then(()=>{
+   btn.classList.remove('busy'); btn.classList.add('bdone');
+   btn.innerHTML=CHECK_ICON+' '+(opts.done||'Done');
+ }).catch(err=>{
+   btn.classList.remove('busy'); btn.classList.add('bfail');
+   btn.innerHTML=X_ICON+' '+(opts.fail||'Failed');
+   if(opts.onError)opts.onError(err);
+ }).finally(()=>{
+   setTimeout(()=>{btn.classList.remove('bdone','bfail');btn.innerHTML=html;btn.disabled=false;btn._busy=false;},opts.revert||1100);
+ });
+}
 const CHK_CIRCLE='<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M7 12.4l3.3 3.3L17 8.4" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function fmtDate(iso){if(!iso)return '';const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso);return m?m[2]+'-'+m[3]+'-'+m[1].slice(2):iso;}
 function fallbackCopy(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);done&&done();}
@@ -359,18 +472,25 @@ function renderQueue(){
      const cn = r.paintBadge && r.paintBadge.colourName;
      if(!cn || !colourFilter.has(cn))return;
    }
-   if(hideConcern.has(r.concernAuto))return;
+   // Show-any (union): if any are active, the release must have qty in at least one.
+   if(showAny.size){let ok=false;showAny.forEach(k=>{if((r.coverage[k]||0)>0)ok=true;});if(!ok)return;}
+   // Hide-all: drop a release only when its ENTIRE balance sits in a hidden bucket.
+   if(r.relBal>0){let drop=false;hideAll.forEach(k=>{if((r.coverage[k]||0)===r.relBal)drop=true;});if(drop)return;}
    if(term && !(r.part.toLowerCase().includes(term)||r.customer.toLowerCase().includes(term)))return;
    if(r.shipDate!==lastDay){const g=document.createElement('div');g.className='daygroup';g.textContent='Ship '+(fmtDate(r.shipDate)||'—');h.appendChild(g);lastDay=r.shipDate;}
-   const d=document.createElement('div');d.className='qrow'+(SEL===r.naturalKey?' sel':'');
-   d.innerHTML=`${concernEl(r.concernAuto)}<span class="cust" title="${r.customer}">${r.customer}</span>
+   const d=document.createElement('div');d.className='qrow'+(SEL===r.naturalKey?' sel':'')+(RELSEL.has(r.releaseId)?' relsel':'');
+   d.dataset.rid=r.releaseId;
+   d.innerHTML=`<label class="relselbox" title="Select this whole release for pushing"><input type="checkbox" class="relbox"${RELSEL.has(r.releaseId)?' checked':''}><span class="relnum"></span></label>${concernEl(r.concernAuto)}<span class="cust" title="${r.customer}">${r.customer}</span>
      <span class="plant" title="Release Plant">${r.releasePlant||''}</span>
      <span class="pnwrap"><button class="copybtn" title="Copy part number" aria-label="Copy part number">${COPY_ICON}</button><span class="pn">${r.part}</span>${paintBadge(r.paintBadge)}</span>
      ${covBar(r.coverage)}<span class="date">${fmtDate(r.shipDate)}</span><span class="bal">${r.relBal}</span>`;
    d.onclick=()=>{SEL=r.naturalKey;document.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');loadDetail(r);};
    const cb=d.querySelector('.copybtn');if(cb)cb.addEventListener('click',e=>{e.stopPropagation();copyPart(cb,r.part);});
+   const rb=d.querySelector('.relbox');if(rb){rb.addEventListener('click',e=>e.stopPropagation());
+     rb.addEventListener('change',e=>{e.stopPropagation();toggleRel(r,rb.checked);});}
    h.appendChild(d);shown++;
  });
+ paintRelNums();
  $('#count').textContent=shown+' / '+PAYLOAD.releaseCount;
  $('#datapulled').textContent='Data Pulled At: '+(PAYLOAD.dataPulledAt||'unknown');
  const _av=$('#appver');if(_av)_av.textContent=PAYLOAD.appVersion?('v'+PAYLOAD.appVersion):'';
@@ -387,14 +507,16 @@ function renderCustPanel(){
 }
 $('#custBtn').onclick=()=>{const p=$('#custPanel');p.style.display=p.style.display==='none'?'flex':'none';renderCustPanel();};
 $('#search').oninput=renderQueue;
-// Hide-by-condition chips (good/low/medium/high → green/yellow/orange/red).
+// Condition chips: "Hide all <bucket>" (whole release in bucket) + "Show any <bucket>" (§6a).
 document.querySelectorAll('.hchip').forEach(ch=>ch.onclick=()=>{
-  const k=ch.dataset.k; hideConcern.has(k)?hideConcern.delete(k):hideConcern.add(k);
-  ch.classList.toggle('on',hideConcern.has(k)); renderQueue();});
+  const k=ch.dataset.k, set=(ch.dataset.grp==='show')?showAny:hideAll;
+  set.has(k)?set.delete(k):set.add(k);
+  ch.classList.toggle('on',set.has(k)); renderQueue();});
 
 // Paint-type (EC/PC) + colour filters.
 function updateColourBtn(){
- const showCol = pcState===1;
+ // Colour filter is shown by default; hidden only when PC is set to *exclude* (R18).
+ const showCol = pcState!==-1;
  $('#colourBtn').style.display = showCol ? 'inline-flex' : 'none';
  if(!showCol){colourFilter.clear();$('#colourPanel').style.display='none';}
 }
@@ -435,7 +557,9 @@ $('#colourBtn').onclick=()=>{const p=$('#colourPanel');p.style.display=p.style.d
 function cardHTML(c,o){
  if(c.isReworkMrb)return '';
  const sid=String(c.serial), sel=RUNSEL.has(sid);
- return `<div class="ccard ${c.pastPaint?'past':''} ${sel?'sel':''}" data-serial="${sid}">
+ // Grey containers consumed by another release (not free for this one) — R20.
+ const elsewhere = c.allocatedElsewhere && c.allocatedHere===0;
+ return `<div class="ccard ${c.pastPaint?'past':''} ${sel?'sel':''} ${elsewhere?'elsewhere':''}" data-serial="${sid}"${elsewhere?' title="Allocated to another release"':''}>
    <input type="checkbox" class="selbox" data-serial="${sid}" ${sel?'checked':''} title="Select for runlist">
    <span class="corner"></span>
    <div class="cardmain" data-serial="${sid}"><div class="sn">${c.serial}</div><div class="loc">${c.location}</div>
@@ -478,7 +602,7 @@ function renderStack(detail){
 function renderFlow(detail){
  const stages=[...detail.ops].reverse();
  $('#flowline').innerHTML=stages.map(o=>{
-   const minis=o.containers.map(c=>`<div class="fmini ${c.pastPaint?'past':''}" onclick='showPop(${JSON.stringify(c).replace(/'/g,"&#39;")})'>${c.serial} &middot; ${c.allocatedHere}/${c.qty}</div>`).join('')
+   const minis=o.containers.map(c=>`<div class="fmini ${c.pastPaint?'past':''} ${(c.allocatedElsewhere&&c.allocatedHere===0)?'elsewhere':''}"${(c.allocatedElsewhere&&c.allocatedHere===0)?' title="Allocated to another release"':''} onclick='showPop(${JSON.stringify(c).replace(/'/g,"&#39;")})'>${c.serial} &middot; ${c.allocatedHere}/${c.qty}</div>`).join('')
      +(o.reworkCards.length?`<div class="fmini mrb">MRB ${o.reworkQty}</div>`:'');
    const branch=o.subRoutings.map(s=>`<div class="fbranch"><div class="bl">&#8627; ${s.partNo}</div><div style="font-size:9.5px;color:var(--muted)">net ${s.bomScaledNet}</div>${covBar(s.coverage)}</div>`).join('');
    return `<div class="fstage ${o.collapsed?'up':''} ${o.isPaintOp?'paint':''}">
@@ -501,7 +625,23 @@ function loadDetail(r){
 
 // ---- Runlist authoring (planner): select containers, set qty, push to draft, publish ----
 function markCard(serial,on){const el=document.querySelector('.ccard[data-serial="'+CSS.escape(serial)+'"]');if(el)el.classList.toggle('sel',on);}
-function updateSelCount(){const n=$('#selCount');if(n)n.textContent=RUNSEL.size+' selected';}
+// Whole-release selection (queue checkboxes), ordered by tick order.
+function toggleRel(r,on){
+ if(on)RELSEL.set(r.releaseId,{releaseId:r.releaseId,naturalKey:r.naturalKey,part:r.part,customer:r.customer,shipDate:r.shipDate,paintBadge:r.paintBadge});
+ else RELSEL.delete(r.releaseId);
+ paintRelNums();updateSelCount();const rb=$('#runbar');if(rb)rb.style.display='flex';
+}
+// Repaint each visible queue row's checkbox + selection-order badge (1-based, tick order).
+function paintRelNums(){const keys=[...RELSEL.keys()];
+ document.querySelectorAll('#queue .qrow').forEach(row=>{const rid=row.dataset.rid?+row.dataset.rid:null;
+   const box=row.querySelector('.relbox'),num=row.querySelector('.relnum'),on=RELSEL.has(rid);
+   if(box)box.checked=on;row.classList.toggle('relsel',on);
+   if(num)num.textContent=on?(keys.indexOf(rid)+1):'';});}
+// Combined selection summary: N whole releases + M loose containers (current release only).
+function updateSelCount(){const n=$('#selCount');if(!n)return;
+ const rel=RELSEL.size, con=(window._rel&&!RELSEL.has(window._rel.releaseId))?RUNSEL.size:0;
+ const p=[];if(rel)p.push(rel+' release'+(rel===1?'':'s'));if(con)p.push(con+' container'+(con===1?'':'s'));
+ n.textContent=p.length?p.join(' · ')+' selected':'0 selected';}
 function onSelToggle(serial,cb){
  const c=window._cards&&window._cards[serial]; if(!c){cb.checked=false;return;}
  if(!cb.checked){RUNSEL.delete(serial);markCard(serial,false);updateSelCount();return;}
@@ -542,81 +682,213 @@ function buildItems(target){
      powderColour:target==='pc'?colour:'',part:c.part,queuedPaintSeq:qseq});});
  return items;
 }
-function pushTarget(target){
- const items=buildItems(target);
- if(!items.length){alert('Select at least one container (qty > 0) first.');return;}
- fetch('/runlist/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target,items:items})})
-  .then(x=>x.json()).then(res=>{if(res.error)throw new Error(res.error);
-   const n=$('#ecNotice');
-   if(n){if(target==='pc'&&res.ecAutoAdded>0){n.style.display='inline-block';n.textContent='⚠ '+res.ecAutoAdded+' EC auto-added — review';}else if(target==='pc'){n.style.display='none';n.textContent='';}}
-   RUNSEL=new Map();renderStack(window._detail);updateRunbar();
-  }).catch(e=>alert('Push failed: '+e.message));
+// Build the full-required-allocation items for one release from its detail tree (mirrors the
+// "Select allocation" → push path: every allocated container at its allocatedHere qty).
+function allocItemsFromDetail(d,r,target){
+ const colour=(r.paintBadge&&r.paintBadge.colourName)||'';
+ let qseq=null;
+ d.ops.forEach(o=>{const up=String(o.op).toUpperCase();
+   if(o.isPaintOp){if(target==='pc'&&up.includes('PC'))qseq=o.seq;if(target==='ec'&&up.includes('EC')&&qseq===null)qseq=o.seq;}});
+ const cards={};
+ d.ops.forEach(o=>o.containers.forEach(c=>{if(!c.isReworkMrb)cards[String(c.serial)]={serial:String(c.serial),part:c.part,location:c.location,allocatedHere:c.allocatedHere};}));
+ const items=[];
+ Object.values(cards).forEach(c=>{const aq=+c.allocatedHere||0;if(aq>0)items.push({partNo:c.part,serial:c.serial,location:c.location,
+   allocQty:aq,releaseId:r.releaseId,customer:r.customer,shipDate:r.shipDate,
+   powderColour:target==='pc'?colour:'',part:c.part,queuedPaintSeq:qseq});});
+ return items;
 }
-$('#pushPC').onclick=()=>pushTarget('pc');
-$('#pushEC').onclick=()=>pushTarget('ec');
-$('#publishBtn').onclick=()=>{const b=$('#publishBtn');b.disabled=true;
+function pushItems(target,items){
+ if(!items.length)return Promise.resolve({added:0,skipped:0,ecAutoAdded:0});
+ return fetch('/runlist/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target,items:items})})
+  .then(x=>x.json()).then(res=>{if(res.error)throw new Error(res.error);return res;});
+}
+function hasSelection(){const r=window._rel;
+ return RELSEL.size>0 || (r&&RUNSEL.size>0&&!RELSEL.has(r.releaseId));}
+// Push everything selected — checked whole releases (in tick order) + the viewed release's ticked
+// containers — as sequential per-release pushes so the engine's cascade/PC→EC deficit stay correct.
+async function pushSelection(target){
+ let added=0,skipped=0,ecAuto=0;
+ for(const rid of RELSEL.keys()){
+   const rel=RELSEL.get(rid);
+   const d=await fetch('/detail?rid='+encodeURIComponent(rid)).then(x=>x.json());
+   if(d.error)continue;
+   const res=await pushItems(target,allocItemsFromDetail(d,rel,target));
+   added+=res.added||0;skipped+=res.skipped||0;ecAuto+=res.ecAutoAdded||0;
+ }
+ const r=window._rel;
+ if(r&&RUNSEL.size&&!RELSEL.has(r.releaseId)){
+   const res=await pushItems(target,buildItems(target));
+   added+=res.added||0;skipped+=res.skipped||0;ecAuto+=res.ecAutoAdded||0;
+ }
+ const n=$('#ecNotice');
+ if(n){if(target==='pc'&&ecAuto>0){n.style.display='inline-block';n.textContent='⚠ '+ecAuto+' EC auto-added — review';}else if(target==='pc'){n.style.display='none';n.textContent='';}}
+ if(skipped>0)toast(skipped+' container'+(skipped===1?'':'s')+' skipped — already at/past the '+target.toUpperCase()+' op.','warn');
+ toast('Pushed '+added+' container'+(added===1?'':'s')+' to '+target.toUpperCase()+'.','ok');
+ RELSEL=new Map();RUNSEL=new Map();paintRelNums();
+ if(window._detail)renderStack(window._detail);
+ updateRunbar();
+}
+function onPush(e,target){
+ if(!hasSelection()){toast('Nothing selected — tick releases in the queue or containers in the detail.','warn');return;}
+ btnRun(e.currentTarget,'Pushing',()=>pushSelection(target),{done:'Pushed',onError:err=>alert('Push failed: '+err.message)});
+}
+$('#pushPC').onclick=e=>onPush(e,'pc');
+$('#pushEC').onclick=e=>onPush(e,'ec');
+$('#publishBtn').onclick=e=>btnRun(e.currentTarget,'Publishing',()=>
  fetch('/runlist/publish',{method:'POST'}).then(x=>x.json()).then(res=>{
-   if(res.ok){updateRunbar();}
-   else{const o=res.owner||{};alert('Cannot publish — runlist is owned by '+((o.user||'another planner'))+(o.machine?(' @'+o.machine):'')+'.');}
- }).catch(e=>alert('Publish failed: '+e.message)).finally(()=>{b.disabled=false;});
-};
+   if(res.ok){updateRunbar();return;}
+   const o=res.owner||{};throw new Error('owned by '+((o.user||'another planner'))+(o.machine?(' @'+o.machine):''));
+ }),{done:'Published',onError:err=>alert('Cannot publish — runlist is '+err.message+'.')});
 function updateRunbar(){
  updateSelCount();
  fetch('/runlist/draft.json').then(x=>x.json()).then(d=>{$('#draftCount').textContent='draft: pc '+((d.pc||[]).length)+' · ec '+((d.ec||[]).length);}).catch(()=>{});
  fetch('/runlist/lock').then(x=>x.json()).then(d=>{const o=d.owner;const txt=o?('lock: '+(d.mine?'you':((o.user||'?')+'@'+(o.machine||'?')))):'';$('#lockInfo').textContent=txt;}).catch(()=>{});
 }
 
-// ---- Runlist reorder editor (drag-and-drop) + publish + auto-publish ----
-let _edTimer=null;
-function openEditor(){$('#editor').classList.add('show');loadEditor();
- if(_edTimer)clearInterval(_edTimer);
- _edTimer=setInterval(()=>edPublish(true),600000);}   // auto-publish every 10 min while open
-function closeEditor(){$('#editor').classList.remove('show');if(_edTimer){clearInterval(_edTimer);_edTimer=null;}}
-function loadEditor(){fetch('/runlist/draft.json').then(x=>x.json()).then(renderEditor).catch(()=>{});}
-function eitemHTML(it){const auto=it.source==='auto-ec-deficit';
- return `<div class="eitem ${auto?'auto':''}" draggable="true" data-id="${it.runItemId}">
-  <span class="es">${esc(it.partNo)}</span><span style="color:var(--muted)">${esc(it.serial)}</span>
-  <span style="color:var(--faint)">${esc(it.location||'')}</span><span class="eq">${it.allocQty}</span></div>`;}
-function renderEdList(items,grouped){
- if(!items||!items.length)return '<div class="empty" style="padding:18px">empty</div>';
- if(!grouped)return items.map(eitemHTML).join('');
- let html='',last=null;
- items.forEach(it=>{const col=it.powderColour||'Unknown';if(col!==last){html+='<div class="ecolour">'+esc(col)+'</div>';last=col;}html+=eitemHTML(it);});
- return html;}
-function renderEditor(d){
- $('#edPC').innerHTML=renderEdList(d.pc,true);
- $('#edEC').innerHTML=renderEdList(d.ec,false);
- const autos=(d.ec||[]).filter(i=>i.source==='auto-ec-deficit').length;
- const rev=$('#edRev');if(autos>0){rev.style.display='inline-block';rev.textContent='⚠ '+autos+' auto-added EC — review';}else{rev.style.display='none';}
- wireDnD('edPC');wireDnD('edEC');}
-function wireDnD(listId){const list=$('#'+listId);let dragEl=null;
- list.querySelectorAll('.eitem').forEach(el=>{
-  el.addEventListener('dragstart',()=>{dragEl=el;el.classList.add('drag');});
-  el.addEventListener('dragend',()=>{el.classList.remove('drag');list.querySelectorAll('.eitem').forEach(x=>x.classList.remove('over'));});
-  el.addEventListener('dragover',e=>{e.preventDefault();if(el!==dragEl)el.classList.add('over');});
-  el.addEventListener('dragleave',()=>el.classList.remove('over'));
-  el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('over');
-   if(dragEl&&dragEl!==el){const items=[...list.querySelectorAll('.eitem')];if(items.indexOf(dragEl)<items.indexOf(el))el.after(dragEl);else el.before(dragEl);}});
- });}
-function edOrder(listId){return [...$('#'+listId).querySelectorAll('.eitem')].map(e=>e.dataset.id);}
-function saveOrder(){return Promise.all([
-  fetch('/runlist/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:'pc',order:edOrder('edPC')})}),
-  fetch('/runlist/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:'ec',order:edOrder('edEC')})})]);}
-function edPublish(auto){saveOrder().then(()=>fetch('/runlist/publish',{method:'POST'}).then(x=>x.json()).then(res=>{
-  if(res.ok){updateRunbar();}else if(!auto){const o=res.owner||{};alert('Cannot publish — runlist owned by '+((o.user||'another planner'))+(o.machine?(' @'+o.machine):'')+'.');}
- })).catch(()=>{});}
-function clearTarget(target){
- if(!confirm('Remove all '+target.toUpperCase()+' items from the draft? (does not affect the published floor view until you publish)'))return;
- fetch('/runlist/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target})})
-  .then(x=>x.json()).then(()=>{loadEditor();updateRunbar();}).catch(e=>alert('Clear failed: '+e.message));
+// ---- Runlist reorder editor: grouped drag-and-drop + publish + auto-publish ----
+// EDIT holds the working order for each list (array of run-item dicts). Group headers
+// (PC: colour → part; EC: part) are *derived* from this order on every render, so dragging
+// freely re-groups on drop (§2.4). The flat item order is what we persist via /runlist/reorder.
+const EDIT={pc:[],ec:[]};
+const LISTEL={pc:'edPC',ec:'edEC'};
+const COLL={pc:new Set(),ec:new Set()};   // collapsed group keys per list (click a header to toggle)
+let _edTimer=null,_edPoll=null,DRAG=null;
+
+function openEditor(){window._colHex=colourHexMap();$('#editor').classList.add('show');loadEditor();
+ if(_edTimer)clearInterval(_edTimer);_edTimer=setInterval(()=>edPublish(true),600000); // auto-publish every 10 min
+ if(_edPoll)clearInterval(_edPoll);_edPoll=setInterval(pollEditorDraft,20000);}         // reflect reconcile removals
+function closeEditor(){$('#editor').classList.remove('show');
+ if(_edTimer){clearInterval(_edTimer);_edTimer=null;} if(_edPoll){clearInterval(_edPoll);_edPoll=null;}}
+function loadEditor(){fetch('/runlist/draft.json').then(x=>x.json()).then(applyEditorData).catch(()=>{});}
+function applyEditorData(d){
+ EDIT.pc=(d.pc||[]).slice();EDIT.ec=(d.ec||[]).slice();
+ renderEdList('pc');renderEdList('ec');updateReviewNote();
 }
-$('#clearPC').onclick=()=>clearTarget('pc');
-$('#clearEC').onclick=()=>clearTarget('ec');
-$('#edSave').onclick=()=>saveOrder().then(loadEditor);
-$('#edPublish').onclick=()=>edPublish(false);
+// Review banner counts auto-added EC that the planner has not yet acknowledged (§13).
+function updateReviewNote(){const autos=EDIT.ec.filter(i=>i.source==='auto-ec-deficit'&&!i.acknowledged).length;
+ const rev=$('#edRev');if(autos>0){rev.style.display='inline-block';rev.textContent='⚠ '+autos+' auto-added EC — review';}else{rev.style.display='none';}}
+function swat(col){const h=(window._colHex||{})[col];return h?`<span class="gsw" style="background:${h}"></span>`:'';}
+// Item row shows Serial · Location · Qty only — the part number lives in the group header.
+// Auto-added EC carry a checkmark to acknowledge (clears the amber + the review banner).
+function eitemHTML(it,isPC,hide){const isAuto=it.source==='auto-ec-deficit',amber=isAuto&&!it.acknowledged;
+ // Checkmark only while it still needs review; once acknowledged it's gone (no residual indicator).
+ const ack=amber?`<button class="eack" data-ack="${esc(it.runItemId)}" title="Acknowledge this auto-added EC">${CHECK_ICON}</button>`:'';
+ return `<div class="eitem ${amber?'auto':''} ${isPC?'':'econly'} ${hide?'ehide':''}" draggable="true" data-id="${esc(it.runItemId)}">
+  <span class="es">${esc(it.serial)}</span><span style="color:var(--faint)">${esc(it.location||'')}</span>
+  <span class="eq">${it.allocQty}</span>${ack}</div>`;}
+function ackItem(listKey,id){const it=EDIT[listKey].find(x=>x.runItemId===id);if(!it)return;
+ const next=!it.acknowledged;
+ fetch('/runlist/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runItemId:id,acknowledged:next})})
+  .then(x=>x.json()).then(r=>{if(r&&r.ok===false)return;it.acknowledged=next;renderEdList(listKey);updateReviewNote();}).catch(()=>{});}
+function chunkQty(items,start,grp,isPC){
+ const col=items[start].powderColour||'Unknown',part=items[start].partNo||'—';let q=0;
+ for(let j=start;j<items.length;j++){const c=items[j].powderColour||'Unknown',p=items[j].partNo||'—';
+   if(grp==='colour'){if(isPC&&c!==col)break;}else{if((isPC&&c!==col)||p!==part)break;}
+   q+=(+items[j].allocQty||0);}
+ return q;}
+function renderEdList(listKey){
+ const el=$('#'+LISTEL[listKey]),items=EDIT[listKey]||[],isPC=listKey==='pc',coll=COLL[listKey];
+ if(!items.length){el.innerHTML='<div class="empty" style="padding:18px">empty</div>';return;}
+ // Collapsed groups keep their rows in the DOM (class `ehide`, display:none) so a header drag
+ // still carries them and commitOrder still sees every item — they are only visually hidden.
+ let html='',curCol=null,curPart=null,colDead=false,partDead=false;
+ for(let i=0;i<items.length;i++){const it=items[i],col=it.powderColour||'Unknown',part=it.partNo||'—';
+   if(isPC&&col!==curCol){curCol=col;curPart=null;
+     const ck='c:'+col;colDead=coll.has(ck);
+     html+=`<div class="ehdr colhdr ${colDead?'collapsed':''}" draggable="true" data-grp="colour" data-key="${esc(col)}" data-ckey="${esc(ck)}"><span class="caret">▾</span><span class="ghandle">⠿</span>${swat(col)}<span>${esc(col)}</span><span class="ecount">${chunkQty(items,i,'colour',isPC)}</span></div>`;}
+   if(part!==curPart){curPart=part;
+     const pk=isPC?('p:'+col+'/'+part):('p:'+part);partDead=coll.has(pk);
+     html+=`<div class="ehdr parthdr ${isPC?'':'econly'} ${partDead?'collapsed':''} ${colDead?'ehide':''}" draggable="true" data-grp="part" data-key="${esc(part)}" data-ckey="${esc(pk)}"><span class="caret">▾</span><span class="ghandle">⠿</span><span>${esc(part)}</span><span class="ecount">${chunkQty(items,i,'part',isPC)}</span></div>`;}
+   html+=eitemHTML(it,isPC,colDead||partDead);
+ }
+ el.innerHTML=html;
+}
+// A group header drags its whole chunk: a colour chunk runs to the next colour header; a
+// part chunk runs to the next header of any kind.
+function chunkNodes(hdr){const grp=hdr.dataset.grp,out=[hdr];let n=hdr.nextElementSibling;
+ while(n){if(n.classList.contains('ehdr')){if(grp==='colour'){if(n.classList.contains('colhdr'))break;}else break;}
+   out.push(n);n=n.nextElementSibling;}
+ return out;}
+// FLIP: animate every row from its pre-move position to its post-move position (make-space, §2.3).
+function flip(list,mover){
+ const f=new Map();[...list.children].forEach(k=>f.set(k,k.getBoundingClientRect().top));
+ mover();
+ [...list.children].forEach(k=>{const o=f.get(k);if(o==null)return;const dy=o-k.getBoundingClientRect().top;
+   if(dy){k.style.transition='none';k.style.transform='translateY('+dy+'px)';
+     requestAnimationFrame(()=>{k.style.transition='';k.style.transform='';});}});
+}
+function commitOrder(listKey){
+ const ids=[...$('#'+LISTEL[listKey]).querySelectorAll('.eitem')].map(e=>e.dataset.id);
+ const by={};EDIT[listKey].forEach(it=>by[it.runItemId]=it);
+ EDIT[listKey]=ids.map(id=>by[id]).filter(Boolean);
+ renderEdList(listKey);   // re-derive headers from the new order
+ saveOrder(listKey);
+}
+function wireEditorDnD(listKey){
+ const list=$('#'+LISTEL[listKey]);
+ list.addEventListener('dragstart',e=>{const row=e.target.closest('.eitem,.ehdr');if(!row||!list.contains(row))return;
+   const nodes=row.classList.contains('ehdr')?chunkNodes(row):[row];
+   DRAG={list:listKey,nodes};nodes.forEach(n=>n.classList.add('drag'));list.classList.add('dragging');
+   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',row.dataset.id||row.dataset.key||'');}catch(_){}});
+ list.addEventListener('dragover',e=>{if(!DRAG||DRAG.list!==listKey)return;e.preventDefault();
+   const over=e.target.closest('.eitem,.ehdr');if(!over||!list.contains(over)||DRAG.nodes.indexOf(over)>=0)return;
+   const r=over.getBoundingClientRect(),after=(e.clientY-r.top)>r.height/2;
+   let ref=after?over.nextElementSibling:over;
+   if(ref&&DRAG.nodes.indexOf(ref)>=0)return;
+   flip(list,()=>{DRAG.nodes.forEach(n=>list.insertBefore(n,ref));});});
+ const finish=()=>{if(!DRAG||DRAG.list!==listKey)return;
+   DRAG.nodes.forEach(n=>n.classList.remove('drag'));list.classList.remove('dragging');DRAG=null;
+   list._noclick=true;setTimeout(()=>{list._noclick=false;},60);   // suppress the post-drag click
+   commitOrder(listKey);};
+ list.addEventListener('drop',e=>{e.preventDefault();finish();});
+ list.addEventListener('dragend',finish);
+ // Acknowledge an auto-added EC (checkmark), or collapse/expand a group header (not a drag).
+ list.addEventListener('click',e=>{if(list._noclick)return;
+   const a=e.target.closest('.eack');if(a){e.stopPropagation();ackItem(listKey,a.dataset.ack);return;}
+   const h=e.target.closest('.ehdr');if(!h||!list.contains(h))return;
+   const k=h.dataset.ckey;if(!k)return;COLL[listKey].has(k)?COLL[listKey].delete(k):COLL[listKey].add(k);renderEdList(listKey);});
+}
+function saveOrder(listKey){return fetch('/runlist/reorder',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({target:listKey,order:EDIT[listKey].map(i=>i.runItemId)})}).then(()=>updateRunbar()).catch(()=>{});}
+function saveAll(){return Promise.all([saveOrder('pc'),saveOrder('ec')]);}
+function edPublish(auto){return saveAll().then(()=>fetch('/runlist/publish',{method:'POST'}).then(x=>x.json()).then(res=>{
+  if(res.ok){updateRunbar();return;}
+  if(!auto){const o=res.owner||{};throw new Error('owned by '+((o.user||'another planner'))+(o.machine?(' @'+o.machine):''));}
+ }));}
+// Reflect reconcile removals in the open editor: animate run containers out, then re-render.
+function pollEditorDraft(){if(DRAG)return;fetch('/runlist/draft.json').then(x=>x.json()).then(d=>{
+  if(DRAG)return;['pc','ec'].forEach(k=>reconcileEditorList(k,d[k]||[]));}).catch(()=>{});}
+function reconcileEditorList(k,newItems){
+  const newById={};newItems.forEach(it=>newById[it.runItemId]=it);
+  const removed=EDIT[k].filter(it=>!newById[it.runItemId]);
+  const qtyChanged=EDIT[k].some(it=>{const n=newById[it.runItemId];return n&&(+n.allocQty)!==(+it.allocQty);});
+  if(!removed.length&&!qtyChanged&&newItems.length===EDIT[k].length)return;
+  if(removed.length){removed.forEach(it=>{const el=$('#'+LISTEL[k]+' .eitem[data-id="'+CSS.escape(it.runItemId)+'"]');if(el)el.classList.add('removing');});
+    setTimeout(()=>{EDIT[k]=newItems.slice();renderEdList(k);},420);}
+  else{EDIT[k]=newItems.slice();renderEdList(k);}
+}
+function clearTarget(target){
+ return fetch('/runlist/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target})})
+  .then(x=>x.json()).then(()=>{loadEditor();updateRunbar();});
+}
+function resetTarget(target){
+ return fetch('/runlist/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target})})
+  .then(x=>x.json()).then(()=>{loadEditor();updateRunbar();});
+}
+function onClear(e,target){if(!confirm('Remove all '+target.toUpperCase()+' items from the draft? (does not affect the published floor view until you publish)'))return;
+ btnRun(e.currentTarget,'Clearing',()=>clearTarget(target),{done:'Cleared'});}
+function onReset(e,target){if(!confirm('Reset '+target.toUpperCase()+' to the live published list? Any unpublished edits to this list are discarded.'))return;
+ btnRun(e.currentTarget,'Resetting',()=>resetTarget(target),{done:'Reset'});}
+$('#clearPC').onclick=e=>onClear(e,'pc');
+$('#clearEC').onclick=e=>onClear(e,'ec');
+$('#resetPC').onclick=e=>onReset(e,'pc');
+$('#resetEC').onclick=e=>onReset(e,'ec');
+$('#edSave').onclick=e=>btnRun(e.currentTarget,'Saving',()=>saveAll(),{done:'Saved'});
+$('#edPublish').onclick=e=>btnRun(e.currentTarget,'Publishing',()=>edPublish(false),{done:'Published',onError:err=>alert('Cannot publish — runlist '+err.message+'.')});
 $('#edClose').onclick=closeEditor;
 $('#openEditor').onclick=openEditor;
 $('#editor').addEventListener('click',e=>{if(e.target.id==='editor')closeEditor();});
+wireEditorDnD('pc');wireEditorDnD('ec');
 document.querySelectorAll('#viewtoggle button').forEach(b=>b.onclick=()=>{
  if(b.classList.contains('on'))return;
  document.querySelectorAll('#viewtoggle button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
@@ -698,17 +970,13 @@ RB.onclick=()=>{
 
 // Rebuild graph: force a daily-inputs rebuild (POST /rebuild-graph), then swap in the result.
 const RGB=$('#rebuildGraph');
-if(RGB)RGB.onclick=()=>{
- if(RGB.disabled)return;const t=RGB.textContent;RGB.disabled=true;RGB.textContent='Rebuilding…';
+if(RGB)RGB.onclick=e=>btnRun(e.currentTarget,'Rebuilding',()=>
  fetch('/rebuild-graph',{method:'POST'}).then(x=>x.json()).then(d=>{
    if(d.error)throw new Error(d.error);
    PAYLOAD=d;SEL=null;initDateSlider();renderQueue();
    $('#detailhead').innerHTML='<span class="meta">Select a release&hellip;</span>';
    $('#detailStack').innerHTML='';$('#flowline').innerHTML='';
-   RGB.textContent=t;
- }).catch(()=>{RGB.textContent='Failed';setTimeout(()=>{RGB.textContent=t;},1500);})
-  .finally(()=>{RGB.disabled=false;});
-};
+ }),{done:'Rebuilt'});
 
 // Auto-update: poll the snapshot; when the server has rebuilt from a new ERP
 // pull (dataPulledAt changed), swap in the new payload and re-render in place.
@@ -723,20 +991,26 @@ function applyPayload(d){
 setInterval(()=>{fetch('/snapshot').then(x=>x.json()).then(d=>{
  if(d&&d.dataPulledAt&&d.dataPulledAt!==PAYLOAD.dataPulledAt)applyPayload(d);
 }).catch(()=>{});},15000);
+// Keep the runbar draft counts / lock in sync so the planner sees reconcile removals
+// (5-min heartbeat) reflected even with the editor closed and no new ERP pull.
+setInterval(()=>{if(window._rel)updateRunbar();},20000);
 
 // --- Filter presets: save / apply / delete named filter sets (local only). ---
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function captureFilters(){return {cust:[...custFilter],ec:ecState,pc:pcState,colour:[...colourFilter],
- invP10:invP10,hide:[...hideConcern],search:$('#search').value,
+ invP10:invP10,hideAll:[...hideAll],showAny:[...showAny],search:$('#search').value,
  dateLo:DATES[dLo]||null,dateHi:DATES[dHi]||null};}
 function applyFilters(f){
  f=f||{};
  custFilter=new Set(f.cust||[]);ecState=f.ec||0;pcState=f.pc||0;
- colourFilter=new Set(f.colour||[]);invP10=!!f.invP10;hideConcern=new Set(f.hide||[]);
+ colourFilter=new Set(f.colour||[]);invP10=!!f.invP10;
+ // Back-compat: older saved views used a single `hide` set of concern tiers; drop it silently.
+ hideAll=new Set(f.hideAll||[]);showAny=new Set(f.showAny||[]);
  $('#search').value=f.search||'';
  paintChip('ecChip',ecState,'EC');paintChip('pcChip',pcState,'PC');updateColourBtn();
  $('#invP10Chip').classList.toggle('on',invP10);
- document.querySelectorAll('.hchip').forEach(ch=>ch.classList.toggle('on',hideConcern.has(ch.dataset.k)));
+ document.querySelectorAll('.hchip').forEach(ch=>{const set=(ch.dataset.grp==='show')?showAny:hideAll;
+   ch.classList.toggle('on',set.has(ch.dataset.k));});
  if(DATES.length){
    let lo=0,hi=DATES.length-1;
    if(f.dateLo){const i=DATES.findIndex(d=>d>=f.dateLo);if(i>=0)lo=i;}
@@ -793,5 +1067,5 @@ $('#shareView').onclick=()=>{
   .then(x=>x.json()).then(r=>{if(!r.ok)alert('Cannot save — a shared view named “'+name+'” is owned by '+(r.creator||'another user')+'.');renderSharedViews();});
 };
 
-initDateSlider();renderQueue();loadPresets();renderPresets();renderSharedViews();
+updateColourBtn();initDateSlider();renderQueue();loadPresets();renderPresets();renderSharedViews();
 </script></body></html>"""

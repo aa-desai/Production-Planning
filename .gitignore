@@ -41,6 +41,12 @@ Runlists/
 Snapshots/
 Views/
 
+# `Runlists/` above is matched case-insensitively on Windows (core.ignorecase=true) and at any
+# depth, so it ALSO swallowed the SOURCE package `paint_dashboard/runlists/`. Re-include the
+# source package's Python files; the runtime `Runlists/` output folder stays ignored.
+!**/paint_dashboard/runlists/
+!**/paint_dashboard/runlists/*.py
+
 # ---- OS / OneDrive / editor cruft ----
 desktop.ini
 .DS_Store

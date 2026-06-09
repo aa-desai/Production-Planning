@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import socket
-from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from .payload import build_detail_tree
@@ -30,7 +30,7 @@ from .runlists.model import SOURCE_AUTO_EC, items_from_doc
 from .serialization import _ship_iso
 from .state import STATE
 from .ui import HTML_PAGE
-from . import views
+from . import log, views
 
 
 def _cascade_context(target: str, raw_items: list, draft: dict):
@@ -83,8 +83,25 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             return {}
 
-    def _pc_ec_deficit(self, raw: list, draft: dict):
-        """Compute + add PC→EC deficit EC items to *draft* (design §13). Returns (count, report)."""
+    def _release_detail(self, raw: list):
+        """Build the detail tree for the release these pushed items belong to (or ``None``)."""
+        rid0 = next((it.get("releaseId") for it in raw if it.get("releaseId") is not None), None)
+        if rid0 is None:
+            return None
+        with STATE.lock:
+            result, idx = STATE.result, STATE.idx
+        if result is None or idx is None:
+            return None
+        rel = idx.ext_by_id.get(int(rid0))
+        if not rel:
+            return None
+        return build_detail_tree(result, idx, int(rid0), int(rel.get("Rel Bal") or 0))
+
+    def _pc_ec_deficit(self, raw: list, draft: dict, detail: dict = None):
+        """Compute + add PC→EC deficit EC items to *draft* (design §13). Returns (count, report).
+
+        *detail* may be a pre-built tree for this release (avoids rebuilding it on the push path).
+        """
         rid0 = next((it.get("releaseId") for it in raw if it.get("releaseId") is not None), None)
         if rid0 is None:
             return 0, {"applicable": False}
@@ -95,7 +112,8 @@ class Handler(BaseHTTPRequestHandler):
         rel = idx.ext_by_id.get(int(rid0))
         if not rel:
             return 0, {"applicable": False}
-        detail = build_detail_tree(result, idx, int(rid0), int(rel.get("Rel Bal") or 0))
+        if detail is None:
+            detail = build_detail_tree(result, idx, int(rid0), int(rel.get("Rel Bal") or 0))
         if not detail:
             return 0, {"applicable": False}
         pc_run_qty = sum(int(it.get("allocQty") or 0) for it in raw)
@@ -171,13 +189,16 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 draft = push.load_draft()
                 raw = body.get("items", [])
+                detail = self._release_detail(raw)
+                # Drop containers already in/past the target paint op (R17); never repaint.
+                raw, skipped = push.eligible_items(detail, target, raw)
                 fifo, placed = _cascade_context(target, raw, draft)
                 raw2, report = push.cascade_items(raw, fifo, placed)  # over-allocation cascade
                 items = [push.run_item_from_input(target, it) for it in raw2]
                 push.add_items(draft, target, items)
-                resp = {"ok": True, "added": len(items), "cascade": report}
+                resp = {"ok": True, "added": len(items), "skipped": skipped, "cascade": report}
                 if target == "pc":  # PC→EC deficit auto-fill (R4)
-                    ec_added, ec_rep = self._pc_ec_deficit(raw, draft)
+                    ec_added, ec_rep = self._pc_ec_deficit(raw, draft, detail)
                     resp["ecAutoAdded"] = ec_added
                     resp["ecDeficit"] = ec_rep
                 push.save_draft(draft)
@@ -190,6 +211,31 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 draft = push.load_draft()
                 push.reorder(draft, str(body.get("target", "")), body.get("order", []))
+                push.save_draft(draft)
+                self._json({"ok": True, "draftCounts": {"pc": len(draft.get("pc", [])),
+                                                         "ec": len(draft.get("ec", []))}})
+            except Exception as e:  # noqa: BLE001
+                self._json({"error": str(e)}, 400)
+        elif u.path == "/runlist/ack":
+            # Acknowledge (or un-acknowledge) an auto-added EC draft item (planner review, §13).
+            body = self._read_json()
+            try:
+                draft = push.load_draft()
+                found = push.acknowledge(draft, str(body.get("runItemId", "")),
+                                         bool(body.get("acknowledged", True)))
+                if found:
+                    push.save_draft(draft)
+                self._json({"ok": found})
+            except Exception as e:  # noqa: BLE001
+                self._json({"error": str(e)}, 400)
+        elif u.path == "/runlist/reset":
+            # Revert a target's draft to the live published list (design §16, Reset button).
+            body = self._read_json()
+            t = body.get("target")
+            t = t if t in ("pc", "ec") else None   # None = reset both
+            try:
+                draft = push.load_draft()
+                push.reset_to_live(draft, t)
                 push.save_draft(draft)
                 self._json({"ok": True, "draftCounts": {"pc": len(draft.get("pc", [])),
                                                          "ec": len(draft.get("ec", []))}})
@@ -220,6 +266,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(res, 200 if res.get("ok") else 409)
         else:
             self._send(404, b"not found", "text/plain")
+
+
+class DashboardServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that logs unhandled request errors to the package logger.
+
+    The stdlib default prints request tracebacks to ``stderr``, which vanishes when the
+    console window closes — so an error triggered by a specific request would leave no
+    trace. Routing it through the logger persists it to the log file. A request error does
+    NOT take down the server; this is purely for diagnostics.
+    """
+
+    daemon_threads = True  # worker threads don't block process exit
+
+    def handle_error(self, request, client_address):  # noqa: D401
+        log.exception("Unhandled error servicing request from %s", client_address)
 
 
 def _free_port() -> int:
