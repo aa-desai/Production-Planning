@@ -87,7 +87,9 @@ logging.raiseExceptions = False
 # Application version (SemVer; see DESIGN.md §V). MAJOR = capability epoch
 # (1 = read-only dashboard, 2 = + PC/EC runlists). In-development builds toward the
 # next release carry a "-dev" suffix; drop it when that version is complete & verified.
-__version__ = "2.0.0-dev"
+# 2.1.0: multi-release selection/push, reconcile heartbeat + last-EC/PC-op gate, editor
+# grouping/collapse/ack/reset, toast notifications, publish-when-empty, EC-eligibility fix.
+__version__ = "2.1.0"
 
 # Shared logger name, matching the original single-file module.
 log = logging.getLogger("paint_dashboard")

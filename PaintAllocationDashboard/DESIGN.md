@@ -1,17 +1,17 @@
 # Paint Allocation Dashboard — Design
 
-**Status:** Part 1 (read-only allocation dashboard) **built & shipping**. Part 2
-(PC/EC floor runlists) **built & verified (P1–P7 + packaging + shared views, 2026-06-05)**.
-All V2.0.0 code complete; to ship: run the build (3 exes), flip `__version__` to `2.0.0`, and
-do an in-browser click-through smoke. See [PROGRESS.md](PROGRESS.md).
-**Current version:** **V1.1.0** (read-only dashboard + self-contained refactor).
-**Target:** **V2.0.0** — the full build this doc describes (Part 1 + Part 2 runlists).
+**Status:** Parts 1 + 2 **built, shipping from `PaintAllocationDashboard\`** (promoted from
+WIP 2026-06-10). See [PROGRESS.md](PROGRESS.md).
+**Current version:** **V2.1.0** — V2.0.x runlists plus multi-release selection/push, the
+5-min reconcile heartbeat + last-EC/PC-op gate, the reworked editor (grouped DnD, collapse,
+ack, reset), toast notifications, publish-when-empty, and the EC-eligibility fix.
 
 This is the single, consolidated design doc for everything under
 `PaintAllocationDashboard\`. It folds in the former `Python Script\paint_dashboard_V2_design.md`
 (Draft v10) and updates it to current reality, then specifies the new runlist feature.
-Build history / resumable log lives in [PROGRESS.md](PROGRESS.md). Engine internals
-(inputs/outputs/columns) are documented separately in `Python Script\graph_allocator_V2_README.md`.
+Build history / resumable log lives in [PROGRESS.md](PROGRESS.md). The project-level
+overview / IT handoff (system, modules, UI reference, input data) is the root
+[README.md](../README.md), which absorbed the former `graph_allocator_V2_README.md`.
 
 ---
 
@@ -39,8 +39,8 @@ Build history / resumable log lives in [PROGRESS.md](PROGRESS.md). Engine intern
   runlists (the full build this doc describes).
 - **MINOR** = user-facing feature additions within an epoch. **PATCH** = fixes / internal.
 
-**Timeline:** `V1.0.0` first read-only build → `V1.1.0` self-contained package refactor
-(current) → `V2.0.0` full runlist build (target).
+**Timeline:** `V1.0.0` first read-only build → `V1.1.0` self-contained package refactor →
+`V2.0.x` full runlist build (user testing) → `V2.1.0` selection/reconcile/editor wave (current).
 
 **Single source of truth:** `paint_dashboard.__version__`. Surfaced in the queue payload as
 `appVersion`, rendered in the dashboard header, and embedded in the snapshot filename (§7).

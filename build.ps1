@@ -2,7 +2,6 @@
 # To build just one, run its build-<Name>.ps1 directly. Any failure stops the run.
 Set-Location $PSScriptRoot
 
-& "$PSScriptRoot\build-InventoryAllocator.ps1"
 & "$PSScriptRoot\build-GraphAllocator.ps1"
 & "$PSScriptRoot\build-PaintAllocationDashboard.ps1"
 

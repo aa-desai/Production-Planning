@@ -23,8 +23,21 @@ function Build-Exe([string]$name, [string]$entry, [string[]]$extra) {
               '--workpath', $work, '--distpath', $dist, '--specpath', $spec) + $extra + @('--name', $name, $entry)
   & $py @pyargs
   if ($LASTEXITCODE -ne 0) { throw "$name build failed (exit $LASTEXITCODE)" }
-  Copy-Item -Force (Join-Path $dist "$name.exe") ".\PaintAllocationDashboard\"
-  Write-Host "Built $name.exe"
+  # Output goes BESIDE the entry scripts in PaintAllocationDashboard\ — the folder the
+  # launch bats run these exes from.
+  $src = Join-Path $dist "$name.exe"
+  $dst = Join-Path ".\PaintAllocationDashboard" "$name.exe"
+  # A still-running instance file-locks $dst, so the copy would otherwise fail. Stop any
+  # instance that (re)started during the multi-minute build, give Windows a moment to release
+  # the handle, then copy and VERIFY it actually landed — never silently ship a stale exe.
+  Get-Process $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 500
+  try { Copy-Item -Force $src $dst -ErrorAction Stop }
+  catch { throw "${name}: could not overwrite '$dst' (is an instance still running / file locked?): $_" }
+  if ((Get-Item $dst).Length -ne (Get-Item $src).Length) {
+    throw "${name}: copy did not update '$dst' (size mismatch) - stale exe still in place."
+  }
+  Write-Host "Built $name.exe -> PaintAllocationDashboard\ ($((Get-Item $dst).LastWriteTime))"
 }
 
 # Planner dashboard. Bundles the vendored engine automatically (it is imported as a normal
@@ -36,7 +49,7 @@ Build-Exe "PaintAllocationDashboard" "PaintAllocationDashboard\paint_allocation_
 
 # Floor viewers: pipeline-free, stdlib-only (the runlists viewer path never imports pandas /
 # the engine), so no special collection flags — the exes stay tiny.
-#Build-Exe "PaintRunlistPC" "PaintAllocationDashboard\runlist_pc.py" @()
-#Build-Exe "PaintRunlistEC" "PaintAllocationDashboard\runlist_ec.py" @()
+Build-Exe "PaintRunlistPC" "PaintAllocationDashboard\runlist_pc.py" @()
+Build-Exe "PaintRunlistEC" "PaintAllocationDashboard\runlist_ec.py" @()
 
 Write-Host "All Paint dashboard/runlist exes built."
