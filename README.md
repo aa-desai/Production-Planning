@@ -180,8 +180,6 @@ downstream tools). The dashboard itself writes **no CSVs**.
 - **No automated tests;** parity vs the trusted CSV is a manual `--parity` run.
 - **OneDrive quirks:** file locks can break in-tree PyInstaller builds (hence `%TEMP%`) and
   occasionally delay shared-file writes; all shared writes are atomic (`tmp` + replace).
-- **Coverage approximation:** cross-part coverage rolls sub-component rows up at face value
-  (BOM multiplier ≈ 1 for the bar bucketing); the detail pane shows true scaled quantities.
 - **Trusted engine:** never edit `paint_dashboard\engine\` directly — it is a byte-identical
   vendored copy of `Python Script\graph_allocator_V2.py` / `allocation_common.py`; change the
   source and re-vendor.
