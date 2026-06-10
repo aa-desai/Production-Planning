@@ -306,7 +306,12 @@ queued for — drives reconciliation), `source` (`manual` / `auto-ec-deficit`), 
   totals are summed and surfaced via a toast.
 - Two buttons: **Push to PC runlist**, **Push to EC runlist** (separate).
 - **Eligibility by paint op (R17).** A push only takes containers that still **need** the op
-  in question — i.e. whose current position is **upstream of** the target paint op. **Push to
+  in question — i.e. whose current position is **upstream of** the target paint op.
+  Paint-op detection is **case-sensitive** (`"EC"`/`"PC"` substring, matching the engine):
+  real paint ops are `EC-Load`/`EC-Unload`/`PC-Hang`/`PC-Unload` (uppercase prefix), so
+  lookalike ops with a lowercase "ec"/"pc" — `Inspection`, `Receive`, `Inspection & Ship` —
+  are **not** treated as paint ops. (Upper-casing first was a bug: it wrongly gated the op right
+  before e-coat, blocking those containers from the EC push.) **Push to
   PC** silently drops any selected container that is **in or past a PC op** (it has already
   been — or is currently being — powdercoated); **Push to EC** drops any container **in or
   past an EC op**. Position is judged by the container's node `seq` vs. the branch's EC/PC op

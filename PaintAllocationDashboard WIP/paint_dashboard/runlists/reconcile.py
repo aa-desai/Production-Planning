@@ -41,7 +41,9 @@ def build_last_paint_seqs(result) -> tuple[dict, dict]:
     last_ec: dict[str, int] = {}
     last_pc: dict[str, int] = {}
     for (part, op), node in result.graph.nodes.items():
-        o = str(op).upper()
+        # Case-sensitive like the engine's last_paint_seq: real paint ops are "EC-…"/"PC-…".
+        # Upper-casing would mis-count ops like "Inspection"/"Receive" (lowercase "ec") as EC.
+        o = str(op)
         if "EC" in o and node.seq > last_ec.get(part, -1):
             last_ec[part] = node.seq
         if "PC" in o and node.seq > last_pc.get(part, -1):

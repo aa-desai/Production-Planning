@@ -125,7 +125,10 @@ def eligible_items(detail: dict, target: str, items: list[dict]) -> tuple[list[d
 
     def _walk(node: dict) -> None:
         ops = node.get("ops", [])
-        tok_seqs = [o["seq"] for o in ops if tok in str(o.get("op", "")).upper()]
+        # Match the engine's CASE-SENSITIVE paint-op test: real paint ops are "EC-…"/"PC-…"
+        # (uppercase prefix). Upper-casing here would wrongly treat ops like "Inspection" or
+        # "Receive" (lowercase "ec") as EC ops and block the op right before real e-coat.
+        tok_seqs = [o["seq"] for o in ops if tok in str(o.get("op", ""))]
         gate = min(tok_seqs) if tok_seqs else None
         for o in ops:
             for c in o.get("containers", []):
@@ -157,8 +160,9 @@ def ec_deficit_items(detail: dict, pc_run_qty: int, release: dict) -> tuple[list
     Pure: ``detail`` is the (pandas-free) detail tree from ``build_detail_tree``.
     """
     ops = detail.get("ops", []) if detail else []
-    ec_seqs = [o["seq"] for o in ops if "EC" in str(o.get("op", "")).upper()]
-    pc_seqs = [o["seq"] for o in ops if "PC" in str(o.get("op", "")).upper()]
+    # Case-sensitive like the engine (real paint ops are "EC-…"/"PC-…"); see eligible_items.
+    ec_seqs = [o["seq"] for o in ops if "EC" in str(o.get("op", ""))]
+    pc_seqs = [o["seq"] for o in ops if "PC" in str(o.get("op", ""))]
     if not ec_seqs or not pc_seqs:
         return [], {"applicable": False}
     ec_seq, pc_seq = min(ec_seqs), min(pc_seqs)

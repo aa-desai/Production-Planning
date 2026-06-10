@@ -174,6 +174,20 @@ cd PaintAllocationDashboard
 ---
 
 ## Session log (newest first)
+### 2026-06-10 — FIX: EC push blocked the op right before e-coat (case-sensitive paint-op match)
+- **Bug:** containers at the op directly before the first EC op couldn't be pushed to the EC runlist.
+- **Cause:** `push.eligible_items` upper-cased op names before the `"EC"`/`"PC"` substring test, so
+  lookalike ops with a lowercase "ec"/"pc" — `Inspection - WIP`, `Receive - ea`, `Customer Receive`,
+  `Inspection & Ship` — were mistaken for EC/PC ops (real ones are `EC-Load`/`EC-Unload`/`PC-Hang`/
+  `PC-Unload`). The earliest false "EC" op became the gate, blocking everything from that op onward.
+  The engine itself matches **case-sensitively**, so this was a dashboard-only divergence.
+- **Fix:** dropped `.upper()` in `eligible_items` (gate), `ec_deficit_items` (`ec_seqs`/`pc_seqs`),
+  and `reconcile.build_last_paint_seqs` — all now case-sensitive like the engine. (UI `queuedPaintSeq`
+  detection already gates on `isPaintOp`, so it was unaffected.)
+- **Verified:** `py_compile`; unit with real op names — `Inspection - WIP` (before `EC-Load`) now
+  eligible for EC, `EC-Load`/`EC-Unload` still gated; reconcile `last_ec`/`last_pc` resolve to
+  `EC-Unload`/`PC-Unload`, not the trailing `Inspection & Ship`.
+
 ### 2026-06-09 — Multi-release queue selection + combined ordered push; runbar moved under title
 - **Runbar relocated** to directly under the "Selected Release" title (moved above `detailhead`).
 - **Queue checkboxes (`RELSEL`)** — each Release Queue row gets a checkbox + a selection-order
