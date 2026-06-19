@@ -51,10 +51,18 @@ def _container_at_p10(c: "ga.Container") -> bool:
     return str(c.container_plant) == P10_PLANT or str(c.location) == P10_LOCATION
 
 
-def build_queue_payload(result: PipelineResult, idx: Indexes) -> dict:
-    """releases[] for the Release Queue, ship-date ASC (design §3.1)."""
+def build_queue_payload(result: PipelineResult, idx: Indexes,
+                        releases_override: "Optional[object]" = None) -> dict:
+    """releases[] for the Release Queue, ship-date ASC (design §3.1).
+
+    ``releases_override`` (a dashboard-annotated copy of ``releases_with_id`` from
+    :mod:`paint_dashboard.overdue`) carries the P6-shifted ``Ship Date``, a
+    ``Ship To`` column and an ``Overdue`` flag. When absent (annotate failed), we
+    fall back to the raw engine frame and rows simply have ``overdue=False``.
+    """
     flag_lookup = result.paint_flags.set_index("Part Number")
-    rel = result.releases_with_id.copy()
+    rel = (releases_override if releases_override is not None
+           else result.releases_with_id).copy()
     rel["_ship_iso"] = rel["Ship Date"].map(_ship_iso)
     rel = rel.sort_values(["Ship Date", "Customer", "Part Number"], kind="stable")
 
@@ -79,6 +87,20 @@ def build_queue_payload(result: PipelineResult, idx: Indexes) -> dict:
             _p10_cache[part] = bool(reach & parts_with_p10_inv)
         return _p10_cache[part]
 
+    # serial -> inventory Add Date, for the per-release add-date range shown in the queue.
+    serial_add: dict = {}
+    for n in graph.nodes.values():
+        for c in n.containers:
+            ad = getattr(c, "add_date", None)
+            if ad is None:
+                continue
+            try:
+                ts = pd.Timestamp(ad)
+            except (ValueError, TypeError):
+                continue
+            if not pd.isna(ts):
+                serial_add[str(c.serial)] = ts
+
     for r in rel.to_dict("records"):
         rid = int(r["Release ID"])
         part = r["Part Number"]
@@ -91,6 +113,10 @@ def build_queue_payload(result: PipelineResult, idx: Indexes) -> dict:
         nk = natural_key(cust, part, ship, rel_bal, ddx)
 
         rows = idx.alloc_by_top.get(rid, [])
+        add_dates = [serial_add[s] for s in
+                     {str(rr.get("Serial No")) for rr in rows} if s in serial_add]
+        add_lo = min(add_dates).strftime("%Y-%m-%d") if add_dates else None
+        add_hi = max(add_dates).strftime("%Y-%m-%d") if add_dates else None
         cov = _bucket_rows(rows)
         cov["short"] = max(rel_bal - cov["pastPaint"] - cov["paintable"] - cov["pipeline"], 0)
         concern = concern_from_coverage(cov, rel_bal)
@@ -106,14 +132,24 @@ def build_queue_payload(result: PipelineResult, idx: Indexes) -> dict:
             "releasePlant": str(r.get("Release Plant", "") or ""),
             "customer": cust,
             "part": part,
+            "shipTo": str(r.get("Ship To", "") or ""),
             "shipDate": ship,
+            "addDateLo": add_lo,
+            "addDateHi": add_hi,
             "relBal": rel_bal,
+            "overdue": bool(r.get("Overdue", False)),
             "p10Inventory": _subtree_has_p10(part),
             "coverage": cov,
             "concernAuto": concern,
             "paintBadge": badge,
             "hasPaintedSubcomponents": rid in parents_with_children,
         })
+
+    # Ship-date ASC (primary), then OLDEST inventory add date first within each ship-date
+    # block; releases with no add date sort last. ("" ship/add -> high sentinel = last.)
+    releases.sort(key=lambda x: (x["shipDate"] or "9999-99-99",
+                                 x["addDateLo"] or "9999-99-99",
+                                 x["customer"], x["part"]))
 
     customers = sorted({r["customer"] for r in releases if r["customer"]})
     return {

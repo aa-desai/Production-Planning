@@ -72,12 +72,10 @@ body.resizing{cursor:col-resize!important;user-select:none}
 .concern.high::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
 .hidegrp{display:inline-flex;align-items:center;gap:4px}
 .hidegrp .hlbl{font-size:11px;color:var(--muted)}
-.hchip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 7px;border:1px solid var(--line);border-radius:6px;cursor:pointer;background:#fff;user-select:none}
-.hchip i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
-.hchip.on{background:#f0f1f5;color:var(--muted);text-decoration:line-through;border-color:#cdd2db}
-.hchip.on i{opacity:.4}
-.hchip.show.on{background:var(--accent);color:#fff;border-color:var(--accent);text-decoration:none}
-.hchip.show.on i{opacity:1}
+/* Coverage condition chips (Any/OR sections): tri-state off -> require (.on) -> exclude (.neg). */
+.chip.cond{gap:5px}
+.chip.cond i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto;border:1px solid rgba(0,0,0,.18)}
+.chip.cond.on i,.chip.cond.neg i{border-color:rgba(255,255,255,.7)}
 .pbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600}
 .pbadge .ec{background:#e7f0ff;color:#1554c0;border:1px solid #bcd2f7;border-radius:4px;padding:1px 5px}
 .swatch{min-width:21px;width:auto;height:16px;padding:0 4px;border-radius:3px;border:1px solid rgba(0,0,0,.28);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;white-space:nowrap}
@@ -114,8 +112,14 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 .qrow.relsel{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
 .qrow .plant{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center}
 .qrow:hover{background:var(--accent-soft)}.qrow.sel{background:var(--accent-soft);border-color:var(--accent);border-left:4px solid var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.qrow.overdue{background:rgba(220,38,38,.07)}
+.qrow.overdue:hover{background:rgba(220,38,38,.12)}
+.qrow.overdue.relsel{background:rgba(220,38,38,.16);box-shadow:inset 0 0 0 1px rgba(220,38,38,.55)}
+.qrow.overdue.sel{background:rgba(220,38,38,.22);border-color:rgba(220,38,38,.85);border-left:4px solid rgba(220,38,38,.95);box-shadow:inset 0 0 0 1px rgba(220,38,38,.6)}
+.qrow.overdue.sel:hover{background:rgba(220,38,38,.28)}
 .qrow .cust{color:var(--muted);font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qrow .pnwrap{display:flex;align-items:center;gap:6px;min-width:0}
+.qrow .addr{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;flex:0 0 auto;letter-spacing:-.2px}
 .qrow .pn{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qrow .date{font-family:var(--mono);color:var(--muted);font-size:13px;white-space:nowrap;text-align:right}.qrow .bal{font-weight:800;font-size:15px;text-align:right}
 .copybtn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;padding:0;border:1px solid var(--line);background:#fff;color:var(--faint);border-radius:5px;cursor:pointer}
@@ -271,7 +275,13 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 .toast.warn{border-left-color:var(--c-pipe)}
 .toast.err{border-left-color:var(--c-short)}
 .toast.ok{border-left-color:var(--c-past)}
+/* Global top loading bar — smooth GPU transform; replaces sticky per-button animations. */
+#loadbar{position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;overflow:hidden;opacity:0;transition:opacity .12s;pointer-events:none}
+#loadbar.on{opacity:1}
+#loadbar::before{content:"";position:absolute;top:0;left:0;height:100%;width:35%;border-radius:0 3px 3px 0;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:lbslide 1s ease-in-out infinite;will-change:transform}
+@keyframes lbslide{0%{transform:translateX(-120%)}100%{transform:translateX(400%)}}
 </style></head><body>
+<div id="loadbar" aria-hidden="true"></div>
 <header class="app">
   <span class="logo">Paint Allocation Dashboard <small id="appver"></small></span>
   <span id="datapulled" class="pulled"></span>
@@ -304,19 +314,19 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
           <span class="chip" id="pcChip" data-p="PC">PC</span>
           <span class="chip" id="colourBtn">Colour &#9662;</span>
           <span class="chip" id="invP10Chip" title="Hide P6 releases that have no inventory anywhere in their routing at P10">Inventory at P10</span>
-          <span class="hidegrp" title="Hide releases whose ENTIRE balance sits in this bucket">
-            <span class="hlbl">Hide all</span>
-            <span class="hchip" data-grp="hide" data-k="pastPaint" title="hide releases fully covered past paint"><i style="background:var(--c-past)"></i>Past Paint</span>
-            <span class="hchip" data-grp="hide" data-k="paintable" title="hide releases whose whole balance is at the paint op"><i style="background:var(--c-paint)"></i>WIP</span>
-            <span class="hchip" data-grp="hide" data-k="pipeline"  title="hide releases whose whole balance is still upstream"><i style="background:var(--c-pipe)"></i>Pipeline</span>
-            <span class="hchip" data-grp="hide" data-k="short"     title="hide releases that are entirely short / empty pipeline"><i style="background:var(--c-short)"></i>Short</span>
+          <span class="hidegrp" title="Any: matches if the release has SOME of every chip you set. Click = has some of this bucket; click again = has none; again = off.">
+            <span class="hlbl">Any</span>
+            <span class="chip cond" data-grp="any" data-k="pastPaint"><i style="background:var(--c-past)"></i><span class="cl">Past Paint</span></span>
+            <span class="chip cond" data-grp="any" data-k="paintable"><i style="background:var(--c-paint)"></i><span class="cl">WIP</span></span>
+            <span class="chip cond" data-grp="any" data-k="pipeline"><i style="background:var(--c-pipe)"></i><span class="cl">Pipeline</span></span>
+            <span class="chip cond" data-grp="any" data-k="short"><i style="background:var(--c-short)"></i><span class="cl">Short</span></span>
           </span>
-          <span class="hidegrp" title="Show only releases where ANY allocation is in this bucket">
-            <span class="hlbl">Show any</span>
-            <span class="hchip show" data-grp="show" data-k="pastPaint" title="any qty past paint"><i style="background:var(--c-past)"></i>Past Paint</span>
-            <span class="hchip show" data-grp="show" data-k="paintable" title="any qty at the paint op (WIP)"><i style="background:var(--c-paint)"></i>WIP</span>
-            <span class="hchip show" data-grp="show" data-k="pipeline"  title="any qty in the pipeline"><i style="background:var(--c-pipe)"></i>Pipeline</span>
-            <span class="hchip show" data-grp="show" data-k="short"     title="any short / empty"><i style="background:var(--c-short)"></i>Short</span>
+          <span class="hidegrp" title="All: matches only if the ENTIRE coverage bar is (or, when 'not', is not) that bucket. Click = entire bar is this; click again = entire bar is not this; again = off.">
+            <span class="hlbl">All</span>
+            <span class="chip cond" data-grp="all" data-k="pastPaint"><i style="background:var(--c-past)"></i><span class="cl">Past Paint</span></span>
+            <span class="chip cond" data-grp="all" data-k="paintable"><i style="background:var(--c-paint)"></i><span class="cl">WIP</span></span>
+            <span class="chip cond" data-grp="all" data-k="pipeline"><i style="background:var(--c-pipe)"></i><span class="cl">Pipeline</span></span>
+            <span class="chip cond" data-grp="all" data-k="short"><i style="background:var(--c-short)"></i><span class="cl">Short</span></span>
           </span>
           <input class="search" id="search" placeholder="part #&hellip;">
           <span class="spacer"></span><span id="count" style="font-size:11px;color:var(--muted)"></span>
@@ -388,8 +398,8 @@ let PAYLOAD = __PAYLOAD__;
 let SEL = null, VIEW = 'stack', custFilter = new Set(), colourFilter = new Set();
 let RUNSEL = new Map();                   // serial -> {qty} selected for the runlist (current release)
 let RELSEL = new Map();                   // releaseId -> release meta; whole releases ticked in the queue (ordered)
-let hideAll = new Set();                 // coverage buckets to hide when the WHOLE release is in them
-let showAny = new Set();                 // coverage buckets a release must have ANY qty in (union)
+let condAny = {};                        // "Any" section: bucket -> 1 (has some) | -1 (has none); partial presence, all set chips AND
+let condAll = {};                        // "All" section: bucket -> 1 (entire bar IS) | -1 (entire bar IS NOT); whole-bar, all set chips AND
 let ecState = 0, pcState = 0;            // 0=off, 1=require, -1=exclude
 let invP10 = false;                      // hide P6 releases with no P10 inventory in their routing
 let DATES = [], dLo = 0, dHi = 0;        // ship-date range slider (indices into DATES)
@@ -423,28 +433,29 @@ function toast(msg,type,ms){
  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);}, ms||4500);
 }
 
-// (2.2) Generic loading button: spinner + label while *factory()* runs, then a brief
-// green "done" / red "fail" state, before reverting to the original content. Mirrors the
-// Refresh button's feedback for every async action button.
+// Global top loading bar (ref-counted) — replaces the per-button spinner / width
+// animations, which felt sticky while a heavy render blocked the main thread.
+let _loads=0;
+function loadStart(){_loads++;const b=$('#loadbar');if(b)b.classList.add('on');}
+function loadStop(){_loads=Math.max(0,_loads-1);if(!_loads){const b=$('#loadbar');if(b)b.classList.remove('on');}}
+
+// Generic async action button: disable it + show the loading bar while *factory()* runs
+// (no in-button animation). `label` / `opts.done` kept for call-site compatibility.
 function btnRun(btn,label,factory,opts){
  opts=opts||{};
  if(!btn||btn._busy)return; btn._busy=true;
- const html=btn.innerHTML;
- btn.disabled=true; btn.classList.remove('bdone','bfail'); btn.classList.add('busy');
- btn.innerHTML='<span class="bspin"></span>'+(label||'');
- Promise.resolve().then(factory).then(()=>{
-   btn.classList.remove('busy'); btn.classList.add('bdone');
-   btn.innerHTML=CHECK_ICON+' '+(opts.done||'Done');
- }).catch(err=>{
-   btn.classList.remove('busy'); btn.classList.add('bfail');
-   btn.innerHTML=X_ICON+' '+(opts.fail||'Failed');
-   if(opts.onError)opts.onError(err);
- }).finally(()=>{
-   setTimeout(()=>{btn.classList.remove('bdone','bfail');btn.innerHTML=html;btn.disabled=false;btn._busy=false;},opts.revert||1100);
- });
+ btn.disabled=true; loadStart();
+ // Yield two frames so the bar paints before any heavy synchronous work runs.
+ requestAnimationFrame(()=>requestAnimationFrame(()=>{
+   Promise.resolve().then(factory).catch(err=>{if(opts.onError)opts.onError(err);})
+     .finally(()=>{loadStop();btn.disabled=false;btn._busy=false;});
+ }));
 }
 const CHK_CIRCLE='<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M7 12.4l3.3 3.3L17 8.4" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function fmtDate(iso){if(!iso)return '';const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso);return m?m[2]+'-'+m[3]+'-'+m[1].slice(2):iso;}
+// Oldest inventory add date among a release's allocated containers.
+function addRange(lo,hi){if(!lo)return '';
+ return `<span class="addr" title="Oldest inventory add date among allocated containers">Oldest Added: ${fmtDate(lo)}</span>`;}
 function fallbackCopy(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);done&&done();}
 function copyPart(btn,part){
  const orig=btn.innerHTML, ttl=btn.title;
@@ -472,17 +483,20 @@ function renderQueue(){
      const cn = r.paintBadge && r.paintBadge.colourName;
      if(!cn || !colourFilter.has(cn))return;
    }
-   // Show-any (union): if any are active, the release must have qty in at least one.
-   if(showAny.size){let ok=false;showAny.forEach(k=>{if((r.coverage[k]||0)>0)ok=true;});if(!ok)return;}
-   // Hide-all: drop a release only when its ENTIRE balance sits in a hidden bucket.
-   if(r.relBal>0){let drop=false;hideAll.forEach(k=>{if((r.coverage[k]||0)===r.relBal)drop=true;});if(drop)return;}
+   // "Any" (partial presence): every set chip must hold — 1 = has some qty, -1 = has none.
+   for(const k in condAny){const has=(r.coverage[k]||0)>0;
+     if(condAny[k]===1 && !has)return; if(condAny[k]===-1 && has)return;}
+   // "All" (whole bar): the ENTIRE coverage bar IS (1) / IS NOT (-1) that bucket.
+   {const tot=(r.coverage.pastPaint+r.coverage.paintable+r.coverage.pipeline+r.coverage.short)||0;
+    for(const k in condAll){const isAll=tot>0 && (r.coverage[k]||0)===tot;
+      if(condAll[k]===1 && !isAll)return; if(condAll[k]===-1 && isAll)return;}}
    if(term && !(r.part.toLowerCase().includes(term)||r.customer.toLowerCase().includes(term)))return;
    if(r.shipDate!==lastDay){const g=document.createElement('div');g.className='daygroup';g.textContent='Ship '+(fmtDate(r.shipDate)||'—');h.appendChild(g);lastDay=r.shipDate;}
-   const d=document.createElement('div');d.className='qrow'+(SEL===r.naturalKey?' sel':'')+(RELSEL.has(r.releaseId)?' relsel':'');
+   const d=document.createElement('div');d.className='qrow'+(SEL===r.naturalKey?' sel':'')+(RELSEL.has(r.releaseId)?' relsel':'')+(r.overdue?' overdue':'');
    d.dataset.rid=r.releaseId;
    d.innerHTML=`<label class="relselbox" title="Select this whole release for pushing"><input type="checkbox" class="relbox"${RELSEL.has(r.releaseId)?' checked':''}><span class="relnum"></span></label>${concernEl(r.concernAuto)}<span class="cust" title="${r.customer}">${r.customer}</span>
      <span class="plant" title="Release Plant">${r.releasePlant||''}</span>
-     <span class="pnwrap"><button class="copybtn" title="Copy part number" aria-label="Copy part number">${COPY_ICON}</button><span class="pn">${r.part}</span>${paintBadge(r.paintBadge)}</span>
+     <span class="pnwrap"><button class="copybtn" title="Copy part number" aria-label="Copy part number">${COPY_ICON}</button><span class="pn">${r.part}</span>${paintBadge(r.paintBadge)}${addRange(r.addDateLo,r.addDateHi)}</span>
      ${covBar(r.coverage)}<span class="date">${fmtDate(r.shipDate)}</span><span class="bal">${r.relBal}</span>`;
    d.onclick=()=>{SEL=r.naturalKey;document.querySelectorAll('.qrow').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');loadDetail(r);};
    const cb=d.querySelector('.copybtn');if(cb)cb.addEventListener('click',e=>{e.stopPropagation();copyPart(cb,r.part);});
@@ -507,11 +521,19 @@ function renderCustPanel(){
 }
 $('#custBtn').onclick=()=>{const p=$('#custPanel');p.style.display=p.style.display==='none'?'flex':'none';renderCustPanel();};
 $('#search').oninput=renderQueue;
-// Condition chips: "Hide all <bucket>" (whole release in bucket) + "Show any <bucket>" (§6a).
-document.querySelectorAll('.hchip').forEach(ch=>ch.onclick=()=>{
-  const k=ch.dataset.k, set=(ch.dataset.grp==='show')?showAny:hideAll;
-  set.has(k)?set.delete(k):set.add(k);
-  ch.classList.toggle('on',set.has(k)); renderQueue();});
+// Coverage condition chips — tri-state per bucket: off -> "is" (.on) -> "is not" (.neg "not …")
+// -> off. Two sections, each AND-combining its set chips (and AND with each other): "Any" tests
+// partial presence (has some / has none), "All" tests the whole bar (entire bar is / is not).
+const COND_LABELS={pastPaint:'Past Paint',paintable:'WIP',pipeline:'Pipeline',short:'Short'};
+function condMap(grp){return grp==='all'?condAll:condAny;}
+function paintCondChip(ch){const m=condMap(ch.dataset.grp),s=m[ch.dataset.k]||0;
+  ch.classList.toggle('on',s===1);ch.classList.toggle('neg',s===-1);
+  const cl=ch.querySelector('.cl');if(cl)cl.textContent=(s===-1?'not ':'')+COND_LABELS[ch.dataset.k];}
+function paintAllCondChips(){document.querySelectorAll('.chip.cond').forEach(paintCondChip);}
+document.querySelectorAll('.chip.cond').forEach(ch=>ch.onclick=()=>{
+  const m=condMap(ch.dataset.grp),k=ch.dataset.k,s=m[k]||0,n=(s===0?1:s===1?-1:0);
+  if(n===0)delete m[k];else m[k]=n;
+  paintCondChip(ch);renderQueue();});
 
 // Paint-type (EC/PC) + colour filters.
 function updateColourBtn(){
@@ -935,37 +957,27 @@ function showMrb(cards){
 $('#pop').onclick=e=>{if(e.target.id==='pop')e.currentTarget.classList.remove('show');};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#pop').classList.remove('show');});
 const RB=$('#refresh'), RIC=RB.querySelector('.ricon'), RLB=RB.querySelector('.rlabel');
-// Smoothly animate the button from its current width to the natural width of the
-// new content, while the icon slot slides in/out. `mutate` applies the new label
-// + icon + colour and returns whether the icon should be shown afterwards.
-function refreshTransition(mutate){
- const startW=RB.getBoundingClientRect().width, startIcon=RIC.classList.contains('show');
- RB.style.transition='none';RIC.style.transition='none';
- const endIcon=!!mutate();
- RIC.classList.toggle('show',endIcon);          // final icon state → measure target width
- RB.style.width='auto';const endW=RB.getBoundingClientRect().width;
- RB.style.width=startW+'px';RIC.classList.toggle('show',startIcon);  // back to start
- RB.offsetWidth;                                // reflow while transitions are off
- RB.style.transition='';RIC.style.transition='';
- requestAnimationFrame(()=>{RB.style.width=endW+'px';RIC.classList.toggle('show',endIcon);});
-}
+// No width-morphing transition (the forced double-reflow felt sticky during heavy
+// renders). Just a label/icon swap + the global loading bar; width changes follow
+// naturally via the button's own CSS transition.
 let refreshing=false;
-function refreshIdle(){refreshTransition(()=>{RB.classList.remove('done','fail');RLB.textContent='Refresh';return false;});
- setTimeout(()=>{RIC.innerHTML='';RB.style.width='';},380);refreshing=false;}
+function refreshIdle(){RB.classList.remove('done','fail','busy');RIC.classList.remove('show');RIC.innerHTML='';RLB.textContent='Refresh';refreshing=false;}
 RB.onclick=()=>{
- if(refreshing)return;refreshing=true;RB.classList.remove('done','fail');
- refreshTransition(()=>{RIC.innerHTML=SPINNER;RLB.textContent='Refreshing';return true;});
+ if(refreshing)return;refreshing=true;
+ RB.classList.remove('done','fail');RB.classList.add('busy');
+ RIC.innerHTML=SPINNER;RIC.classList.add('show');RLB.textContent='Refreshing';
+ loadStart();
  fetch('/refresh',{method:'POST'}).then(x=>x.json()).then(d=>{
    if(d.error)throw new Error(d.error);
    PAYLOAD=d;SEL=null;initDateSlider();renderQueue();
    $('#detailhead').innerHTML='<span class="meta">Select a release&hellip;</span>';
    $('#detailStack').innerHTML='';$('#flowline').innerHTML='';
-   refreshTransition(()=>{RB.classList.add('done');RIC.innerHTML=CHK_CIRCLE;RLB.textContent='Refreshed';return true;});
+   RB.classList.remove('busy');RB.classList.add('done');RIC.innerHTML=CHK_CIRCLE;RLB.textContent='Refreshed';
    setTimeout(refreshIdle,1200);
  }).catch(()=>{
-   refreshTransition(()=>{RB.classList.add('fail');RIC.innerHTML=CHECK_ICON;RLB.textContent='Failed';return true;});
+   RB.classList.remove('busy');RB.classList.add('fail');RIC.innerHTML=CHECK_ICON;RLB.textContent='Failed';
    setTimeout(refreshIdle,2200);
- });
+ }).finally(()=>{loadStop();});
 };
 
 // Rebuild graph: force a daily-inputs rebuild (POST /rebuild-graph), then swap in the result.
@@ -998,19 +1010,18 @@ setInterval(()=>{if(window._rel)updateRunbar();},20000);
 // --- Filter presets: save / apply / delete named filter sets (local only). ---
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function captureFilters(){return {cust:[...custFilter],ec:ecState,pc:pcState,colour:[...colourFilter],
- invP10:invP10,hideAll:[...hideAll],showAny:[...showAny],search:$('#search').value,
+ invP10:invP10,condAny:Object.assign({},condAny),condAll:Object.assign({},condAll),search:$('#search').value,
  dateLo:DATES[dLo]||null,dateHi:DATES[dHi]||null};}
 function applyFilters(f){
  f=f||{};
  custFilter=new Set(f.cust||[]);ecState=f.ec||0;pcState=f.pc||0;
  colourFilter=new Set(f.colour||[]);invP10=!!f.invP10;
- // Back-compat: older saved views used a single `hide` set of concern tiers; drop it silently.
- hideAll=new Set(f.hideAll||[]);showAny=new Set(f.showAny||[]);
+ // Back-compat: older saved views used hideAll/showAny sets; those buckets no longer apply — drop silently.
+ condAny=Object.assign({},f.condAny||{});condAll=Object.assign({},f.condAll||{});
  $('#search').value=f.search||'';
  paintChip('ecChip',ecState,'EC');paintChip('pcChip',pcState,'PC');updateColourBtn();
  $('#invP10Chip').classList.toggle('on',invP10);
- document.querySelectorAll('.hchip').forEach(ch=>{const set=(ch.dataset.grp==='show')?showAny:hideAll;
-   ch.classList.toggle('on',set.has(ch.dataset.k));});
+ paintAllCondChips();
  if(DATES.length){
    let lo=0,hi=DATES.length-1;
    if(f.dateLo){const i=DATES.findIndex(d=>d>=f.dateLo);if(i>=0)lo=i;}

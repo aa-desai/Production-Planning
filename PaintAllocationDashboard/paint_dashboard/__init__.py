@@ -89,7 +89,12 @@ logging.raiseExceptions = False
 # next release carry a "-dev" suffix; drop it when that version is complete & verified.
 # 2.1.0: multi-release selection/push, reconcile heartbeat + last-EC/PC-op gate, editor
 # grouping/collapse/ack/reset, toast notifications, publish-when-empty, EC-eligibility fix.
-__version__ = "2.1.0"
+# 2.2.0: overdue release detection + faint red wash in the queue (global past-due + same-date
+# duplicate collisions, gated to ship date <= today), P6 internal-lead-time -1-day shift
+# (display/overdue only), the daily Volvo-Trucks churn-snapshot pool (computed + logged; not yet
+# wired into the wash), the queue inventory add-date range, the "Any"/"All" condition filters
+# (replacing "OR"), and a global loading bar replacing the sticky per-button animations.
+__version__ = "2.2.0"
 
 # Shared logger name, matching the original single-file module.
 log = logging.getLogger("paint_dashboard")

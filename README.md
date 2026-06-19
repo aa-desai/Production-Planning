@@ -111,12 +111,18 @@ routing/BOM mid-day (else cached per day) and re-allocates · `Refresh` re-reads
 releases and re-allocates (animated status).
 
 **Release queue (left):** per-row **checkbox** selects the whole release for pushing (badge =
-selection order) · row click opens detail · copy icon copies the part number ·
-**Views** save/apply/delete personal filter presets; **Shared** publishes them to all planners ·
-quick filters: `+ Customer`, `EC`/`PC` (tri-state: off → require → exclude), `Colour ▾`,
-`Inventory at P10`, **Hide all** chips (hide releases entirely in a bucket), **Show any** chips
-(must have qty in a bucket), part/customer search, ship-date range sliders + `all dates` ·
-draggable splitter between panes.
+selection order) · row click opens detail · copy icon copies the part number · rows with a
+**faint red wash are "overdue"** (only releases due today or earlier — never future) — past
+their (P6-shifted) ship date, or one of ≥2 releases sharing the same customer/part/ship-to/ship-date ·
+each row also shows **"Oldest Added"** (the earliest add date of the containers allocated to it)
+next to the colour badge, and rows are sorted **oldest-first within each ship-date block** · **Views** save/apply/delete personal filter presets;
+**Shared** publishes them to all planners · quick filters: `+ Customer`, `EC`/`PC` (tri-state:
+off → require → exclude), `Colour ▾`, `Inventory at P10`, coverage condition chips in two sections
+— **Any** (partial: the bar has *some* / *none* of a bucket) and **All** (whole bar: the *entire*
+bar *is* / *is not* a bucket), each chip tri-state (click = is, click again = is not, again = off)
+over Past Paint / WIP / Pipeline / Short — part/customer search, ship-date range sliders + `all dates` ·
+draggable splitter between panes. A slim **loading bar** at the top of the page shows while any
+action (refresh, push, publish, …) is running.
 
 **Selected release (right):** `Stack`/`Flow` toggle switches detail layout · runbar (under the
 title): `Select allocation` ticks the viewed release's allocated containers · `Push → PC` /
@@ -159,9 +165,11 @@ shows as `Not Found`.
 downstream tools). The dashboard itself writes **no CSVs**.
 
 **Runtime files (dashboard, all derived/regenerable except the runlists):**
-`Snapshots\` (fast-open snapshot pool) · `Runlists\runlist_live.json` + `runlist_owner.lock`
-(the published floor list — shared state) · `Views\` (shared saved views) ·
-`runlist_draft.json` (per-machine draft) · rotating `*.log` / `*_fault.log` beside each exe.
+`Snapshots\` (fast-open snapshot pool) · `Snapshots\volvo_churn\<date>.json` (daily Volvo-Trucks
+release snapshot for overdue/churn detection — first run of each day, two kept) ·
+`Runlists\runlist_live.json` + `runlist_owner.lock` (the published floor list — shared state) ·
+`Views\` (shared saved views) · `runlist_draft.json` (per-machine draft) · rotating
+`*.log` / `*_fault.log` beside each exe.
 
 ## 7. Run, build, develop
 

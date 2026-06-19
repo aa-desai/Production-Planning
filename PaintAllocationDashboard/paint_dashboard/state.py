@@ -22,6 +22,7 @@ from typing import Optional
 from . import __version__, log
 from .datasource import _raw_data_mtime_epoch
 from .indexes import Indexes, build_indexes
+from .overdue import annotate as annotate_overdue
 from .payload import build_queue_payload, set_current_graph
 from .pipeline import DailyInputs, PipelineResult, load_daily_inputs, run_allocation
 from .runlists import lock as rlock, push as rpush, reconcile as rrec, store as rstore
@@ -75,7 +76,14 @@ class AppState:
                     daily = self._ensure_daily(force=rebuild_graph)
                     result = run_allocation(daily)
                     idx = build_indexes(result)
-                    payload = build_queue_payload(result, idx)
+                    # Dashboard-layer overdue flag + Volvo churn snapshot (best-effort:
+                    # any failure degrades to "no overdue flags", never breaks a refresh).
+                    try:
+                        rel_annotated = annotate_overdue(result)
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("Overdue annotate skipped: %s", e)
+                        rel_annotated = None
+                    payload = build_queue_payload(result, idx, releases_override=rel_annotated)
                     with self.lock:
                         self.result, self.idx, self.queue_payload = result, idx, payload
                         set_current_graph(result.graph)

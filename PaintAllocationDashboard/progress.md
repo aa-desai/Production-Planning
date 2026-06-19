@@ -9,6 +9,26 @@ handoff: root [README.md](../README.md) (absorbed `graph_allocator_V2_README.md`
 ---
 
 ## Status at a glance
+- **V2.2.0 — current (2026-06-18):** overdue release detection + Volvo churn snapshots. New dashboard-layer module
+  `paint_dashboard/overdue.py` (engine untouched): P6 (`Release Plant == "P6"`) `Ship Date − 1 day` (display/overdue
+  only); per-release `overdue` flag (**gated to ship date ≤ today — never washes future rows**) = 4.1 past-due (global)
+  OR 4.3 same-date duplicate collision due today-or-earlier (both flagged) — wired
+  into a faint red `.qrow.overdue` wash (darker red + red selection border when selected/ticked);
+  4.2 Volvo `volvo_late` churn **computed + logged, not yet washing**. Daily
+  Volvo-Trucks snapshot pool at `<shared>\Snapshots\volvo_churn\<date>.json` (today−1..today+4 window, first-run-of-day,
+  keep 2 most recent, atomic). `payload` rows gain `shipTo` + `overdue`; sort uses shifted dates. Whole step best-effort
+  (wrapped in `state.refresh`; can't break a refresh). Verified: pipeline boot (1212 releases, 494 overdue, day-one
+  snapshot written w/ 174 Volvo rows), unit tests for churn-intersection / duplicate / P6-shift, `node --check` UI.
+  **Also in 2.2.0 (later round):** (a) queue **inventory add-date range** next to the colour badge — `payload`
+  `addDateLo`/`addDateHi` from a serial→add-date map over graph containers, min/max across each release's allocated
+  containers (962/1212 populated). **Displayed as "Oldest Added: <date>" (oldest only)**, and the queue is now sorted
+  **oldest add date first within each ship-date block** (no-add-date rows last); (b) **condition filters reworked** — "OR" replaced by an
+  **"All" (whole-bar: entire bar IS / IS NOT a bucket)** section beside the existing **"Any" (partial)** section
+  (`condOr`→`condAll`, old `condAll`→`condAny`; `data-grp` `or`/`all`→`any`/`all`; old saved views drop the sets);
+  (c) **global loading bar** (`#loadbar`, GPU transform, ref-counted `loadStart`/`loadStop`) replacing the sticky
+  per-button spinner/width animations — `btnRun` just disables+bar, Refresh drops its width-morph transition.
+  See [DESIGN.md](DESIGN.md) §6a / §6b / §6c. Verified: `py_compile`, `node --check`, served-HTML markup grep,
+  end-to-end `state.refresh` (add-date range populated). **Exes NOT yet rebuilt** — run `build-PaintAllocationDashboard.ps1`.
 - **Part 1 — read-only allocation dashboard: BUILT, verified, shipping** (frozen exe exists).
 - **Refactor (2026-06-05): DONE** — now a self-contained `paint_dashboard\` package + vendored engine.
 - **Part 2 — PC/EC floor runlists: BUILT & verified (P1–P7 + packaging), 2026-06-05.** Exes not yet produced —
@@ -176,6 +196,19 @@ cd PaintAllocationDashboard
 ---
 
 ## Session log (newest first)
+### 2026-06-10 — Coverage filters reworked: tri-state "Any" (AND) + "OR" sections
+- Replaced the Hide-all / Show-any chip groups with two tri-state sections over the coverage
+  buckets (Past Paint / WIP / Pipeline / Short). Each chip: click = require **has some**
+  (`coverage[k]>0`, `.on`), click again = require **has none** (`=0`, `.neg` "not …"), again = off.
+  State in `condAll` (match ALL / AND) and `condOr` (match ANY / OR); empty section = no
+  constraint; sections AND together and with all other filters.
+- e.g. *Any: WIP, not Short, not Pipeline* → rows with some WIP and nothing in Short/Pipeline.
+- Touched `ui.py` (CSS `.chip.cond`, two `hidegrp` rows, `condAll`/`condOr` state, renderQueue
+  filter, tri-state click + `paintCondChip`/`paintAllCondChips`, capture/applyFilters). Old saved
+  views with `hideAll`/`showAny` drop those silently. DESIGN §6a + README UI reference updated.
+- **Verified:** `py_compile` + `node --check`; live exe snapshot replay of the example filter →
+  112/1233 rows, 0 violations. Dashboard exe rebuilt to carry the change.
+
 ### 2026-06-10 — Version bump: 2.0.0-dev → 2.1.0 (+ exe rebuild)
 - `paint_dashboard.__version__` → **2.1.0**, dropping `-dev` (promoted to production). MINOR bump
   for the post-2.0.x feature wave: multi-release selection/push, reconcile heartbeat + last-op

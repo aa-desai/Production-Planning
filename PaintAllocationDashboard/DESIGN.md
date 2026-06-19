@@ -2,9 +2,10 @@
 
 **Status:** Parts 1 + 2 **built, shipping from `PaintAllocationDashboard\`** (promoted from
 WIP 2026-06-10). See [PROGRESS.md](PROGRESS.md).
-**Current version:** **V2.1.0** — V2.0.x runlists plus multi-release selection/push, the
-5-min reconcile heartbeat + last-EC/PC-op gate, the reworked editor (grouped DnD, collapse,
-ack, reset), toast notifications, publish-when-empty, and the EC-eligibility fix.
+**Current version:** **V2.2.0** — adds overdue release detection (faint red wash in the queue),
+the P6 internal-lead-time −1-day shift, and the daily Volvo-Trucks churn-snapshot pool (see §6b),
+on top of V2.1.0 (multi-release selection/push, the 5-min reconcile heartbeat + last-EC/PC-op
+gate, the reworked editor, toast notifications, publish-when-empty, and the EC-eligibility fix).
 
 This is the single, consolidated design doc for everything under
 `PaintAllocationDashboard\`. It folds in the former `Python Script\paint_dashboard_V2_design.md`
@@ -40,7 +41,8 @@ overview / IT handoff (system, modules, UI reference, input data) is the root
 - **MINOR** = user-facing feature additions within an epoch. **PATCH** = fixes / internal.
 
 **Timeline:** `V1.0.0` first read-only build → `V1.1.0` self-contained package refactor →
-`V2.0.x` full runlist build (user testing) → `V2.1.0` selection/reconcile/editor wave (current).
+`V2.0.x` full runlist build (user testing) → `V2.1.0` selection/reconcile/editor wave →
+`V2.2.0` overdue detection + P6 lead-time shift + Volvo churn snapshots (current).
 
 **Single source of truth:** `paint_dashboard.__version__`. Surfaced in the queue payload as
 `appVersion`, rendered in the dashboard header, and embedded in the snapshot filename (§7).
@@ -170,11 +172,12 @@ and recursive `subRoutings[]` (internal releases, same shape + `consumedAtOp`,
   intentionally NOT a factor (ship-date drives the queue sort instead).
 
 ### 6. UI (settled decisions still in force)
-- Queue: ship-date ASC under **day dividers**; row = concern pip · customer · plant ·
-  part(+paint badge) · 4-seg coverage bar · ship date · rel bal · copy-part button.
+- Queue: ship-date ASC under **day dividers** (oldest add date first within each block, §6c); row =
+  concern pip · customer · plant · part(+paint badge + **"Oldest Added" date, §6c**) · 4-seg coverage
+  bar · ship date · rel bal · copy-part button. Overdue rows carry a faint red wash (§6b).
 - Filters: customer multi-select, tri-state EC/PC, **colour multiselect (shown by default —
   hidden only when the PC tri-state is set to *exclude* PC; R18)**, "Inventory at P10", the
-  **Hide-all / Show-any condition filters (§6a, R19)**, part search, ship-date range slider,
+  **tri-state "Any" (partial) + "All" (whole-bar) condition filters (§6a)**, part search, ship-date range slider,
   saveable **filter presets** — **personal** (local `localStorage`) **and a shared "common
   bank"** any planner can publish to (§7a).
 - Header shows the app **version** (`appVersion`) by the title, plus the "Data Pulled At" chip.
@@ -192,25 +195,70 @@ and recursive `subRoutings[]` (internal releases, same shape + `consumedAtOp`,
 - **Removed at v10 (do not reintroduce in Part 1):** per-release overrides, `overrides\`
   folder, `concernManual`, concern-cycling, conflict banners, the "manual" pip.
 
-### 6a. Queue condition filters — Hide-all vs. Show-any (V2 refinement, R19)
-The old four "hide-by-condition" chips keyed on a release's single `concernAuto` tier. They
-are replaced by **two parallel filter groups**, both keyed on the release's **coverage
-buckets** (§5: `pastPaint` / `paintable` = **WIP** / `pipeline` / `short`), so the planner can
-slice on what the allocation actually contains rather than on the rolled-up concern tier:
+### 6a. Queue condition filters — tri-state "Any" (partial) + "All" (whole-bar) sections
+Two parallel chip rows, both keyed on the release's **coverage buckets** (§5: `pastPaint` /
+`paintable` = **WIP** / `pipeline` / `short` = **Short**). Each chip is **tri-state** — single
+click = **is** (`.on`); click again = **is not** (`.neg`, shown "not …"); click again = off. State
+lives in `condAny` / `condAll` (`bucket -> 1 | -1`). Each section **AND-combines** its own set chips.
 
-- **Hide all `<condition>`** — hides a release only when the **entire release** meets that
-  condition, i.e. **100 %** of `relBal` sits in that one bucket (e.g. *Hide all Past Paint*
-  drops releases that are fully covered past paint; *Hide all Pipeline* drops releases whose
-  whole balance is still upstream). A partially-covered release is **kept**.
-- **Show any `<condition>`** — narrows the queue to releases where **any** allocation meets the
-  condition, i.e. that bucket is **> 0** (e.g. *Show any WIP* surfaces every release with at
-  least one container sitting at the paint op). With several "Show any" conditions selected, a
-  release shows if it matches **any** of them (union); each active "Hide all" then removes the
-  fully-matching releases from that set.
+- **Any** (partial presence) — *is* = the release has **some** of that bucket (`coverage[k] > 0`);
+  *is not* = it has **none** (`coverage[k] === 0`). Example: *Any: WIP, not Short* → some WIP and
+  nothing in Short.
+- **All** (whole bar) — *is* = the **entire** coverage bar is that bucket (`coverage[k] === total`,
+  i.e. 100% of the bar); *is not* = the entire bar is **not** that bucket (`coverage[k] !== total`).
+  Example: *All: Short* → only releases that are **entirely** short. (`total` = sum of the four
+  buckets, matching the rendered bar.)
 
-Conditions exposed in both groups: **Past Paint, WIP (paintable), Pipeline** (and **Short /
-Empty pipeline** as the natural fourth). The two groups are visually distinct (a "Hide all…"
-row and a "Show any…" row) and combine with all other filters by AND.
+An empty section imposes no constraint; the two sections combine with each other **and** with every
+other filter by **AND**. (Replaces the former "OR" / Hide-all / Show-any groups; old saved views
+that stored those sets simply drop them on load.)
+
+### 6b. Overdue release detection + Volvo churn snapshots (V2.2.0)
+Lives **entirely in the dashboard layer** (`paint_dashboard/overdue.py`), post-processing a copy
+of `result.releases_with_id`. **The vendored engine is never touched**, and the whole step is
+*best-effort*: `state.refresh` wraps `annotate(...)` so any failure degrades to "no overdue
+flags" and the snapshot/churn sub-step is independently guarded — it can never break a refresh.
+
+- **P6 lead-time shift.** Releases with `Release Plant == "P6"` get `Ship Date − 1 calendar day`,
+  reflecting internal lead time. This is **display / overdue only** — the engine's FIFO allocation
+  still uses the original dates (so a P6 release can show a shifted date while its allocation order
+  reflects the original; accepted). The queue sort + shown date use the shifted value.
+- **`overdue` flag** (per release; **gated to ship date ≤ today — nothing due in the future is ever
+  overdue**, then OR of):
+  - **4.1 — past-due (global, all customers):** shifted `Ship Date` < today.
+  - **4.3 — duplicate collision (global):** ≥2 releases share `(Customer, Part No, Ship To, Ship
+    Date)` after the shift → **both/all flagged** (we can't tell which quantity came from which day).
+    Only fires for releases due **today or earlier** (a future-dated same-date pair, e.g. a Volvo
+    6/24 duplicate, is **not** washed).
+  - **4.2 — Volvo churn (computed + logged, NOT yet washing):** `(Part No, Ship To) ∈ volvo_late`.
+    Implemented and logged for validation; **not** wired into the flag this rev.
+  Surfaced as `overdue: bool` on each queue row → faint red `.qrow.overdue` wash, deepening to a
+  darker red when the row is selected (`.sel`) or its release is ticked (`.relsel`) — the selection
+  border/box-shadow also turn red for overdue rows so the cue stays consistent. `shipTo` is also
+  added to the row.
+- **Volvo churn snapshot pool.** Volvo-Trucks `(Part No, Ship To, Ship Date)` keys for ship dates
+  in **[today−1 .. today+4]** (4-day forward window so a Thursday pull reaches Monday) are saved
+  as `<shared>\Snapshots\volvo_churn\<pull-date>.json` (atomic `tmp`+replace) on the **first run
+  of each local day** only; the pool keeps the **2 most recent pull dates**.
+- **Churn pipeline** (only when a previous-pull snapshot exists; the previous may be days back —
+  Monday's is Thursday's, which the 4-day window covers): `missing_yday` = in `prev[due today−1]`
+  but gone from `curr[due today−1]`; `appeared_today` = in `curr[due today]` but absent from
+  `prev[due today]`; `volvo_late = missing_yday ∩ appeared_today` on `(Part No, Ship To)` (qty
+  ignored). On day one (no previous snapshot) it just writes today's snapshot and skips. The
+  backward/weekend handling of "yesterday" is a known limitation, deferred until there are ≥2 days
+  of real snapshots to validate against; the `[today−1]` slice is captured now for that work.
+
+### 6c. Queue add-date range + global loading bar (V2.2.0)
+- **Oldest inventory add date.** Each queue row shows, next to the colour badge, **"Oldest Added: …"**
+  — the *earliest* `Add Date` across the containers **allocated to that release** (`payload.addDateLo`;
+  `addDateHi` is still carried but no longer displayed). A release with no allocated containers shows
+  nothing. **Queue sort:** ship-date ASC (primary), then **oldest add date first** within each
+  ship-date block (no-add-date rows last); customer/part break remaining ties.
+- **Global loading bar.** A single fixed top bar (`#loadbar`, GPU `transform` slide, ref-counted
+  `loadStart`/`loadStop`) replaces the former per-button spinner/`bdone`/`bfail` swaps and the
+  Refresh button's width-morph transition, which felt sticky while a heavy render blocked the main
+  thread. `btnRun` now just disables its button + shows the bar; Refresh swaps label/icon (no width
+  morph) + shows the bar.
 
 ### 7. Config, snapshot, watcher, distribution
 - **Config** `paint_allocation_dashboard.ini` (optional; zero-config otherwise). Keys:
