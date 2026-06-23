@@ -111,7 +111,9 @@ routing/BOM mid-day (else cached per day) and re-allocates · `Refresh` re-reads
 releases and re-allocates (animated status).
 
 **Release queue (left):** per-row **checkbox** selects the whole release for pushing (badge =
-selection order) · row click opens detail · copy icon copies the part number · rows with a
+selection order) · the leftmost cell shows a **yellow caution sign** when the release's oldest
+allocated inventory is **≥ 4 days old** (blank otherwise) · row click opens detail · copy icon
+copies the part number · rows with a
 **faint red wash are "overdue"** (only releases due today or earlier — never future) — past
 their (P6-shifted) ship date, or one of ≥2 releases sharing the same customer/part/ship-to/ship-date ·
 each row also shows **"Oldest Added"** (the earliest add date of the containers allocated to it)

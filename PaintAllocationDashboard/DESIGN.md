@@ -2,10 +2,12 @@
 
 **Status:** Parts 1 + 2 **built, shipping from `PaintAllocationDashboard\`** (promoted from
 WIP 2026-06-10). See [PROGRESS.md](PROGRESS.md).
-**Current version:** **V2.2.0** — adds overdue release detection (faint red wash in the queue),
-the P6 internal-lead-time −1-day shift, and the daily Volvo-Trucks churn-snapshot pool (see §6b),
-on top of V2.1.0 (multi-release selection/push, the 5-min reconcile heartbeat + last-EC/PC-op
-gate, the reworked editor, toast notifications, publish-when-empty, and the EC-eligibility fix).
+**Current version:** **V2.2.1** — swaps the queue's leftmost concern pip for an inventory-age
+caution sign (§6c), on top of V2.2.0 (overdue red wash §6b, the P6 internal-lead-time −1-day shift,
+the daily Volvo-Trucks churn-snapshot pool, the queue add-date / "Oldest Added" display, the
+"Any"/"All" condition filters, and the global loading bar) and V2.1.0 (multi-release selection/push,
+the 5-min reconcile heartbeat + last-EC/PC-op gate, the reworked editor, toasts, publish-when-empty,
+EC-eligibility fix).
 
 This is the single, consolidated design doc for everything under
 `PaintAllocationDashboard\`. It folds in the former `Python Script\paint_dashboard_V2_design.md`
@@ -42,7 +44,8 @@ overview / IT handoff (system, modules, UI reference, input data) is the root
 
 **Timeline:** `V1.0.0` first read-only build → `V1.1.0` self-contained package refactor →
 `V2.0.x` full runlist build (user testing) → `V2.1.0` selection/reconcile/editor wave →
-`V2.2.0` overdue detection + P6 lead-time shift + Volvo churn snapshots (current).
+`V2.2.0` overdue detection + P6 lead-time shift + Volvo churn snapshots →
+`V2.2.1` queue concern pip → inventory-age caution sign (current).
 
 **Single source of truth:** `paint_dashboard.__version__`. Surfaced in the queue payload as
 `appVersion`, rendered in the dashboard header, and embedded in the snapshot filename (§7).
@@ -173,8 +176,9 @@ and recursive `subRoutings[]` (internal releases, same shape + `consumedAtOp`,
 
 ### 6. UI (settled decisions still in force)
 - Queue: ship-date ASC under **day dividers** (oldest add date first within each block, §6c); row =
-  concern pip · customer · plant · part(+paint badge + **"Oldest Added" date, §6c**) · 4-seg coverage
-  bar · ship date · rel bal · copy-part button. Overdue rows carry a faint red wash (§6b).
+  **inventory-age caution sign (§6c)** · customer · plant · part(+paint badge + **"Oldest Added"
+  date, §6c**) · 4-seg coverage bar · ship date · rel bal · copy-part button. Overdue rows carry a
+  faint red wash (§6b). (The concern pip is retained in the detail pane only.)
 - Filters: customer multi-select, tri-state EC/PC, **colour multiselect (shown by default —
   hidden only when the PC tri-state is set to *exclude* PC; R18)**, "Inventory at P10", the
   **tri-state "Any" (partial) + "All" (whole-bar) condition filters (§6a)**, part search, ship-date range slider,
@@ -254,6 +258,12 @@ flags" and the snapshot/churn sub-step is independently guarded — it can never
   `addDateHi` is still carried but no longer displayed). A release with no allocated containers shows
   nothing. **Queue sort:** ship-date ASC (primary), then **oldest add date first** within each
   ship-date block (no-add-date rows last); customer/part break remaining ties.
+- **Inventory-age caution sign (V2.2.1).** The queue row's **leftmost** indicator is now a stale-stock
+  flag instead of the concern pip: a **yellow caution triangle** when the oldest allocated container
+  is **≥ 4 days old** (`payload.oldestAddAgeDays` = calendar days from `date.today()` to the oldest
+  allocated add date), and a **blank but space-occupying** cell otherwise (`< 4` days, or no allocated
+  stock) so rows stay aligned. UI helper `ageFlag(r)` + `CAUTION_ICON`; the concern pip / `concernEl`
+  is unchanged and still shown in the detail pane.
 - **Global loading bar.** A single fixed top bar (`#loadbar`, GPU `transform` slide, ref-counted
   `loadStart`/`loadStop`) replaces the former per-button spinner/`bdone`/`bfail` swaps and the
   Refresh button's width-morph transition, which felt sticky while a heavy render blocked the main

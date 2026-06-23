@@ -64,6 +64,8 @@ body.resizing{cursor:col-resize!important;user-select:none}
 .seg-short{background:var(--c-short)}
 .cov-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
 .cov-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid #bcc1cb}
+.agewarn{width:17px;height:17px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center}
+.agewarn svg{display:block}
 .concern{width:17px;height:17px;border-radius:50%;flex:0 0 auto;display:inline-block;border:2px solid currentColor;position:relative}
 .concern.good{color:var(--t-good);background:currentColor}
 .concern.low{color:var(--t-low);background:linear-gradient(90deg,currentColor 50%,#fff 50%)}
@@ -411,6 +413,13 @@ function covBar(c,lg){const t=(c.pastPaint+c.paintable+c.pipeline+c.short)||1;
  <span class="seg-pipe" style="width:${c.pipeline/t*100}%"></span>
  <span class="seg-short" style="width:${c.short/t*100}%"></span></div>`;}
 function concernEl(t){return `<span class="concern ${t}" title="concern: ${t}"></span>`;}
+// Yellow caution triangle (with "!") — flags a release whose oldest allocated stock is aging.
+const CAUTION_ICON='<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 1.4l6.7 11.6a.8.8 0 0 1-.7 1.2H2a.8.8 0 0 1-.7-1.2z" fill="#f2bf0b" stroke="#9a7a00" stroke-width=".8" stroke-linejoin="round"/><rect x="7.2" y="5.4" width="1.6" height="4.4" rx=".8" fill="#3a2e00"/><circle cx="8" cy="11.4" r="1" fill="#3a2e00"/></svg>';
+// Queue stale-stock indicator: blank (<4 days old / no allocated stock) or a yellow caution
+// sign (oldest allocated container >= 4 days old). The blank span still occupies the column.
+function ageFlag(r){const a=r.oldestAddAgeDays;
+ if(a==null||a<4)return '<span class="agewarn" aria-hidden="true"></span>';
+ return `<span class="agewarn old" title="Oldest allocated stock ${a} days old">${CAUTION_ICON}</span>`;}
 function paintBadge(p){if(!p)return '';if(p.type==='EC')return `<span class="pbadge"><span class="ec">EC</span></span>`;
  const sw=`<span class="swatch" style="background:${p.swatchHex};color:${p.glyphHex}" title="${p.colourName}">${p.colourInitials}</span>`;
  return p.type==='PC'?`<span class="pbadge">${sw}</span>`:`<span class="pbadge"><span class="ec">EC</span>${sw}</span>`;}
@@ -494,7 +503,7 @@ function renderQueue(){
    if(r.shipDate!==lastDay){const g=document.createElement('div');g.className='daygroup';g.textContent='Ship '+(fmtDate(r.shipDate)||'—');h.appendChild(g);lastDay=r.shipDate;}
    const d=document.createElement('div');d.className='qrow'+(SEL===r.naturalKey?' sel':'')+(RELSEL.has(r.releaseId)?' relsel':'')+(r.overdue?' overdue':'');
    d.dataset.rid=r.releaseId;
-   d.innerHTML=`<label class="relselbox" title="Select this whole release for pushing"><input type="checkbox" class="relbox"${RELSEL.has(r.releaseId)?' checked':''}><span class="relnum"></span></label>${concernEl(r.concernAuto)}<span class="cust" title="${r.customer}">${r.customer}</span>
+   d.innerHTML=`<label class="relselbox" title="Select this whole release for pushing"><input type="checkbox" class="relbox"${RELSEL.has(r.releaseId)?' checked':''}><span class="relnum"></span></label>${ageFlag(r)}<span class="cust" title="${r.customer}">${r.customer}</span>
      <span class="plant" title="Release Plant">${r.releasePlant||''}</span>
      <span class="pnwrap"><button class="copybtn" title="Copy part number" aria-label="Copy part number">${COPY_ICON}</button><span class="pn">${r.part}</span>${paintBadge(r.paintBadge)}${addRange(r.addDateLo,r.addDateHi)}</span>
      ${covBar(r.coverage)}<span class="date">${fmtDate(r.shipDate)}</span><span class="bal">${r.relBal}</span>`;

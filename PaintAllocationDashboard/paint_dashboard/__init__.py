@@ -94,7 +94,9 @@ logging.raiseExceptions = False
 # (display/overdue only), the daily Volvo-Trucks churn-snapshot pool (computed + logged; not yet
 # wired into the wash), the queue inventory add-date range, the "Any"/"All" condition filters
 # (replacing "OR"), and a global loading bar replacing the sticky per-button animations.
-__version__ = "2.2.0"
+# 2.2.1: queue leftmost indicator changed from the concern pip to an inventory-age caution sign
+# (yellow triangle when the oldest allocated container is >= 4 days old; blank otherwise).
+__version__ = "2.2.1"
 
 # Shared logger name, matching the original single-file module.
 log = logging.getLogger("paint_dashboard")

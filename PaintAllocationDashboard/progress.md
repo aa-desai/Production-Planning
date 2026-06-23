@@ -9,7 +9,14 @@ handoff: root [README.md](../README.md) (absorbed `graph_allocator_V2_README.md`
 ---
 
 ## Status at a glance
-- **V2.2.0 — current (2026-06-18):** overdue release detection + Volvo churn snapshots. New dashboard-layer module
+- **V2.2.1 — current (2026-06-23):** queue **leftmost indicator** changed from the concern pip to an
+  **inventory-age caution sign** — yellow triangle when the oldest allocated container is **≥ 4 days old**
+  (`payload.oldestAddAgeDays` = calendar days from `date.today()` to the oldest allocated add date), blank
+  but space-occupying otherwise (`< 4` days or no allocated stock). New `ui.py` `ageFlag(r)` + `CAUTION_ICON`;
+  queue row's `concernEl` call replaced (concern pip kept in the detail pane — 2 remaining call sites). `__version__`
+  → `2.2.1`. Verified: `py_compile` + `node --check`, served-HTML markup grep, `state.refresh` (1258 releases, 811
+  caution / 192 recent-blank / 255 no-stock; age 7→caution, 1→blank). See [DESIGN.md](DESIGN.md) §6c. **Exes NOT rebuilt.**
+- **V2.2.0 — (2026-06-18):** overdue release detection + Volvo churn snapshots. New dashboard-layer module
   `paint_dashboard/overdue.py` (engine untouched): P6 (`Release Plant == "P6"`) `Ship Date − 1 day` (display/overdue
   only); per-release `overdue` flag (**gated to ship date ≤ today — never washes future rows**) = 4.1 past-due (global)
   OR 4.3 same-date duplicate collision due today-or-earlier (both flagged) — wired

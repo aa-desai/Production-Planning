@@ -10,7 +10,7 @@ detail tree.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 import pandas as pd
@@ -117,6 +117,9 @@ def build_queue_payload(result: PipelineResult, idx: Indexes,
                      {str(rr.get("Serial No")) for rr in rows} if s in serial_add]
         add_lo = min(add_dates).strftime("%Y-%m-%d") if add_dates else None
         add_hi = max(add_dates).strftime("%Y-%m-%d") if add_dates else None
+        # Age (calendar days, from today) of the OLDEST allocated container — drives the
+        # queue's stale-stock caution indicator (None when nothing is allocated).
+        oldest_add_age = (date.today() - min(add_dates).date()).days if add_dates else None
         cov = _bucket_rows(rows)
         cov["short"] = max(rel_bal - cov["pastPaint"] - cov["paintable"] - cov["pipeline"], 0)
         concern = concern_from_coverage(cov, rel_bal)
@@ -136,6 +139,7 @@ def build_queue_payload(result: PipelineResult, idx: Indexes,
             "shipDate": ship,
             "addDateLo": add_lo,
             "addDateHi": add_hi,
+            "oldestAddAgeDays": oldest_add_age,
             "relBal": rel_bal,
             "overdue": bool(r.get("Overdue", False)),
             "p10Inventory": _subtree_has_p10(part),
