@@ -9,6 +9,12 @@ handoff: root [README.md](../README.md) (absorbed `graph_allocator_V2_README.md`
 ---
 
 ## Status at a glance
+- **V2.2.2 — current (2026-06-24): Runlist editor per-item delete.** Each editor row now has a selection checkbox
+  (`.edsel`; client `edSel` set keyed by `runItemId`). The pane button is dual-purpose — **"Delete (N)"** removes
+  the selected items via new `POST /runlist/delete` (`push.remove_items(target, ids)`); with nothing selected it
+  stays **"Clear"** (empties the pane, confirm-gated). Selections pruned on reload/reconcile. Backend: `push.remove_items`
+  + server endpoint. Verified: `py_compile`, unit test (remove b → a,c; bad target rejected), `node --check`, served-HTML
+  markup grep. `__version__` → `2.2.2`. See [DESIGN.md](DESIGN.md) §16. **Exes NOT rebuilt.**
 - **V2.2.1 — current (2026-06-23):** queue **leftmost indicator** changed from the concern pip to an
   **inventory-age caution sign** — yellow triangle when the oldest allocated container is **≥ 4 days old**
   (`payload.oldestAddAgeDays` = calendar days from `date.today()` to the oldest allocated add date), blank

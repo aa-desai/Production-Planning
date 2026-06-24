@@ -137,8 +137,9 @@ qty) · clicking a card shows container details.
 to move its whole block; headers recompute on drop · header click **collapses/expands** a group ·
 **✓** on amber auto-added EC acknowledges it (clears the review banner) · `Save order` persists ·
 `Confirm & Publish` saves + publishes (also auto-publishes every 10 min while open) ·
-`Reset to live` reverts a pane's draft to the published list · `Clear` empties a pane's draft ·
-`Close`.
+`Reset to live` reverts a pane's draft to the published list · each row has a **selection
+checkbox** and the pane button is dual-purpose — `Delete (N)` removes the selected items, or with
+nothing selected it's `Clear` (empties the whole pane) · `Close`.
 
 **Floor pages (PC/EC):** read-only; poll and re-render; rows animate out when reconciliation
 removes a run container.

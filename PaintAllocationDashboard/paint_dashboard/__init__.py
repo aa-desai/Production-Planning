@@ -96,7 +96,9 @@ logging.raiseExceptions = False
 # (replacing "OR"), and a global loading bar replacing the sticky per-button animations.
 # 2.2.1: queue leftmost indicator changed from the concern pip to an inventory-age caution sign
 # (yellow triangle when the oldest allocated container is >= 4 days old; blank otherwise).
-__version__ = "2.2.1"
+# 2.2.2: runlist editor per-item delete — selection checkboxes + dual-purpose pane button
+# ("Delete (N)" for selected, else "Clear"); new POST /runlist/delete.
+__version__ = "2.2.2"
 
 # Shared logger name, matching the original single-file module.
 log = logging.getLogger("paint_dashboard")

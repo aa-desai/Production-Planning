@@ -13,6 +13,7 @@ Runlist authoring (planner-side; design Part 2):
 * ``GET  /runlist/draft.json`` — the planner's working draft (+ PC grouped for display).
 * ``GET  /runlist/lock``       — current writer-lock owner + whether it's ours.
 * ``POST /runlist/push``       — append selected containers to the draft (``{target, items}``).
+* ``POST /runlist/delete``     — delete selected run-items from a draft list (``{target, ids}``).
 * ``POST /runlist/publish``    — publish the draft to the shared live file (needs the lock).
 """
 
@@ -248,6 +249,17 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 draft = push.load_draft()
                 push.clear(draft, t)
+                push.save_draft(draft)
+                self._json({"ok": True, "draftCounts": {"pc": len(draft.get("pc", [])),
+                                                         "ec": len(draft.get("ec", []))}})
+            except Exception as e:  # noqa: BLE001
+                self._json({"error": str(e)}, 400)
+        elif u.path == "/runlist/delete":
+            # Delete selected run-items from a target draft list (editor checkboxes).
+            body = self._read_json()
+            try:
+                draft = push.load_draft()
+                push.remove_items(draft, str(body.get("target", "")), body.get("ids", []))
                 push.save_draft(draft)
                 self._json({"ok": True, "draftCounts": {"pc": len(draft.get("pc", [])),
                                                          "ec": len(draft.get("ec", []))}})

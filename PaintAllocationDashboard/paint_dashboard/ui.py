@@ -202,6 +202,8 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 #editor .elist{padding:8px;overflow:auto;flex:1}
 .eitem{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;margin:4px 0;background:#fff;cursor:grab;font-size:12.5px}
 .eitem.drag{opacity:.4}.eitem.over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.eitem .edsel{flex:0 0 auto;margin:0 2px 0 0;cursor:pointer}
+.eitem.selrow{background:var(--accent-soft);border-color:var(--accent)}
 .eitem .es{font-family:var(--mono);font-weight:700}.eitem .eq{margin-left:auto;font-family:var(--mono);font-weight:700;color:var(--accent)}
 .eitem.auto{background:#ffedcc;border-color:#f0d18a}
 .ecolour{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;margin:8px 4px 2px}
@@ -781,6 +783,7 @@ function updateRunbar(){
 // (PC: colour → part; EC: part) are *derived* from this order on every render, so dragging
 // freely re-groups on drop (§2.4). The flat item order is what we persist via /runlist/reorder.
 const EDIT={pc:[],ec:[]};
+const edSel=new Set();                     // runItemIds selected (checkboxes) for per-item delete
 const LISTEL={pc:'edPC',ec:'edEC'};
 const COLL={pc:new Set(),ec:new Set()};   // collapsed group keys per list (click a header to toggle)
 let _edTimer=null,_edPoll=null,DRAG=null;
@@ -793,6 +796,9 @@ function closeEditor(){$('#editor').classList.remove('show');
 function loadEditor(){fetch('/runlist/draft.json').then(x=>x.json()).then(applyEditorData).catch(()=>{});}
 function applyEditorData(d){
  EDIT.pc=(d.pc||[]).slice();EDIT.ec=(d.ec||[]).slice();
+ // Drop selections for items no longer in the draft (deleted / reconciled away).
+ const live=new Set([...EDIT.pc,...EDIT.ec].map(it=>it.runItemId));
+ [...edSel].forEach(id=>{if(!live.has(id))edSel.delete(id);});
  renderEdList('pc');renderEdList('ec');updateReviewNote();
 }
 // Review banner counts auto-added EC that the planner has not yet acknowledged (§13).
@@ -804,7 +810,9 @@ function swat(col){const h=(window._colHex||{})[col];return h?`<span class="gsw"
 function eitemHTML(it,isPC,hide){const isAuto=it.source==='auto-ec-deficit',amber=isAuto&&!it.acknowledged;
  // Checkmark only while it still needs review; once acknowledged it's gone (no residual indicator).
  const ack=amber?`<button class="eack" data-ack="${esc(it.runItemId)}" title="Acknowledge this auto-added EC">${CHECK_ICON}</button>`:'';
- return `<div class="eitem ${amber?'auto':''} ${isPC?'':'econly'} ${hide?'ehide':''}" draggable="true" data-id="${esc(it.runItemId)}">
+ const sel=edSel.has(it.runItemId);
+ return `<div class="eitem ${amber?'auto':''} ${sel?'selrow':''} ${isPC?'':'econly'} ${hide?'ehide':''}" draggable="true" data-id="${esc(it.runItemId)}">
+  <input type="checkbox" class="edsel" data-id="${esc(it.runItemId)}"${sel?' checked':''} title="Select for delete">
   <span class="es">${esc(it.serial)}</span><span style="color:var(--faint)">${esc(it.location||'')}</span>
   <span class="eq">${it.allocQty}</span>${ack}</div>`;}
 function ackItem(listKey,id){const it=EDIT[listKey].find(x=>x.runItemId===id);if(!it)return;
@@ -833,7 +841,16 @@ function renderEdList(listKey){
    html+=eitemHTML(it,isPC,colDead||partDead);
  }
  el.innerHTML=html;
+ updateDeleteBtns();
 }
+// Each pane's button deletes the selected items in that pane, or — with nothing selected —
+// clears the whole pane. Label/title reflect which.
+function updateDeleteBtns(){['pc','ec'].forEach(k=>{
+  const b=document.getElementById('clear'+k.toUpperCase());if(!b)return;
+  const n=(EDIT[k]||[]).filter(it=>edSel.has(it.runItemId)).length;
+  b.textContent=n?('Delete ('+n+')'):'Clear';
+  b.title=n?('Delete the '+n+' selected '+k.toUpperCase()+' item(s) from the draft')
+           :('Remove all '+k.toUpperCase()+' items from the draft');});}
 // A group header drags its whole chunk: a colour chunk runs to the next colour header; a
 // part chunk runs to the next header of any kind.
 function chunkNodes(hdr){const grp=hdr.dataset.grp,out=[hdr];let n=hdr.nextElementSibling;
@@ -857,7 +874,8 @@ function commitOrder(listKey){
 }
 function wireEditorDnD(listKey){
  const list=$('#'+LISTEL[listKey]);
- list.addEventListener('dragstart',e=>{const row=e.target.closest('.eitem,.ehdr');if(!row||!list.contains(row))return;
+ list.addEventListener('dragstart',e=>{if(e.target.classList&&e.target.classList.contains('edsel'))return; // checkbox, not a drag
+   const row=e.target.closest('.eitem,.ehdr');if(!row||!list.contains(row))return;
    const nodes=row.classList.contains('ehdr')?chunkNodes(row):[row];
    DRAG={list:listKey,nodes};nodes.forEach(n=>n.classList.add('drag'));list.classList.add('dragging');
    e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',row.dataset.id||row.dataset.key||'');}catch(_){}});
@@ -873,6 +891,11 @@ function wireEditorDnD(listKey){
    commitOrder(listKey);};
  list.addEventListener('drop',e=>{e.preventDefault();finish();});
  list.addEventListener('dragend',finish);
+ // Selection checkboxes (per-item delete). Toggle the row highlight + refresh button labels.
+ list.addEventListener('change',e=>{const cb=e.target.closest('.edsel');if(!cb)return;
+   const id=cb.dataset.id; if(cb.checked)edSel.add(id);else edSel.delete(id);
+   const row=cb.closest('.eitem');if(row)row.classList.toggle('selrow',cb.checked);
+   updateDeleteBtns();});
  // Acknowledge an auto-added EC (checkmark), or collapse/expand a group header (not a drag).
  list.addEventListener('click',e=>{if(list._noclick)return;
    const a=e.target.closest('.eack');if(a){e.stopPropagation();ackItem(listKey,a.dataset.ack);return;}
@@ -902,11 +925,19 @@ function clearTarget(target){
  return fetch('/runlist/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target})})
   .then(x=>x.json()).then(()=>{loadEditor();updateRunbar();});
 }
+function deleteItems(target,ids){
+ return fetch('/runlist/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target,ids:ids})})
+  .then(x=>x.json()).then(()=>{ids.forEach(id=>edSel.delete(id));loadEditor();updateRunbar();});
+}
 function resetTarget(target){
  return fetch('/runlist/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target})})
   .then(x=>x.json()).then(()=>{loadEditor();updateRunbar();});
 }
-function onClear(e,target){if(!confirm('Remove all '+target.toUpperCase()+' items from the draft? (does not affect the published floor view until you publish)'))return;
+function onClear(e,target){
+ // With items selected in this pane, delete just those; otherwise clear the whole pane.
+ const ids=(EDIT[target]||[]).filter(it=>edSel.has(it.runItemId)).map(it=>it.runItemId);
+ if(ids.length){btnRun(e.currentTarget,'Deleting',()=>deleteItems(target,ids),{done:'Deleted'});return;}
+ if(!confirm('Remove all '+target.toUpperCase()+' items from the draft? (does not affect the published floor view until you publish)'))return;
  btnRun(e.currentTarget,'Clearing',()=>clearTarget(target),{done:'Cleared'});}
 function onReset(e,target){if(!confirm('Reset '+target.toUpperCase()+' to the live published list? Any unpublished edits to this list are discarded.'))return;
  btnRun(e.currentTarget,'Resetting',()=>resetTarget(target),{done:'Reset'});}

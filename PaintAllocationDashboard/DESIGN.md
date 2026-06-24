@@ -2,8 +2,9 @@
 
 **Status:** Parts 1 + 2 **built, shipping from `PaintAllocationDashboard\`** (promoted from
 WIP 2026-06-10). See [PROGRESS.md](PROGRESS.md).
-**Current version:** **V2.2.1** — swaps the queue's leftmost concern pip for an inventory-age
-caution sign (§6c), on top of V2.2.0 (overdue red wash §6b, the P6 internal-lead-time −1-day shift,
+**Current version:** **V2.2.2** — adds runlist-editor per-item delete (selection checkboxes +
+dual-purpose Delete/Clear button, §16), on top of V2.2.1 (queue leftmost concern pip → inventory-age
+caution sign §6c) and V2.2.0 (overdue red wash §6b, the P6 internal-lead-time −1-day shift,
 the daily Volvo-Trucks churn-snapshot pool, the queue add-date / "Oldest Added" display, the
 "Any"/"All" condition filters, and the global loading bar) and V2.1.0 (multi-release selection/push,
 the 5-min reconcile heartbeat + last-EC/PC-op gate, the reworked editor, toasts, publish-when-empty,
@@ -45,7 +46,8 @@ overview / IT handoff (system, modules, UI reference, input data) is the root
 **Timeline:** `V1.0.0` first read-only build → `V1.1.0` self-contained package refactor →
 `V2.0.x` full runlist build (user testing) → `V2.1.0` selection/reconcile/editor wave →
 `V2.2.0` overdue detection + P6 lead-time shift + Volvo churn snapshots →
-`V2.2.1` queue concern pip → inventory-age caution sign (current).
+`V2.2.1` queue concern pip → inventory-age caution sign →
+`V2.2.2` runlist-editor per-item delete (current).
 
 **Single source of truth:** `paint_dashboard.__version__`. Surfaced in the queue payload as
 `appVersion`, rendered in the dashboard header, and embedded in the snapshot filename (§7).
@@ -457,7 +459,13 @@ ERP pull. Per `RunItem` (keyed by `serial`):
   (`flip()` records rects, moves, then transitions transform→0).
 - **Reset to live:** each pane (PC, EC) has a **Reset** button that reverts that target's draft
   to the live published list (`/runlist/reset` → `push.reset_to_live`), discarding unpublished
-  edits. Each pane also keeps its **Clear** button (empty the draft; floor unaffected until publish).
+  edits.
+- **Per-item delete / Clear:** each row has a **selection checkbox** (`.edsel`; state in the
+  client `edSel` set, keyed by `runItemId`). The pane's button is **dual-purpose**: with items
+  selected it shows **"Delete (N)"** and removes just those (`/runlist/delete` →
+  `push.remove_items(target, ids)`); with nothing selected it shows **"Clear"** and empties the
+  whole pane (`/runlist/clear`, confirm-gated). Floor is unaffected until publish. Selections are
+  pruned on reload/reconcile (an item gone from the draft drops out of `edSel`).
 - **Item rows show Serial · Location · Qty only** — the part number is shown once, in the group
   header (PC part sub-header / EC part header), not repeated on every container row.
 - **Collapsible groups:** click any group header (colour or part) to collapse/expand its chunk

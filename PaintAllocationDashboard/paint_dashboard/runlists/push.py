@@ -241,6 +241,17 @@ def remove_item(draft: dict, run_item_id: str) -> dict:
     return draft
 
 
+def remove_items(draft: dict, target: str, ids: list) -> dict:
+    """Delete the given run-item ids from a single target list (editor per-item delete).
+    Mutates + returns the draft."""
+    target = target.lower()
+    if target not in ("pc", "ec"):
+        raise ValueError("target must be 'pc' or 'ec'")
+    idset = {str(i) for i in ids}
+    draft[target] = [d for d in draft.get(target, []) if str(d.get("runItemId")) not in idset]
+    return draft
+
+
 def acknowledge(draft: dict, run_item_id: str, value: bool = True) -> bool:
     """Mark a draft run-item acknowledged (planner reviewed an auto-added EC, §13).
 
