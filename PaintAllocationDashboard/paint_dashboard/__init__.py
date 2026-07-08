@@ -44,12 +44,27 @@ import threading
 import time
 
 
-def _run_dir() -> str:
-    """Folder to write logs into: beside the frozen exe, else the launcher's folder
-    (the ``PaintAllocationDashboard*`` dir that holds the entry script)."""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def _log_dir() -> str:
+    """Folder to write logs into: a **machine-local, non-synced** folder.
+
+    Logs previously lived beside the exe / entry script, but that folder is typically a
+    OneDrive library synced across machines — so every coworker's instance wrote the *same*
+    synced log file, producing ``*.log-<MACHINE>.N`` conflict copies and rename races. Keeping
+    logs local avoids that. Resolver is inlined (``LOCALAPPDATA`` + home fallback) so it runs at
+    import time without importing ``config`` (which imports ``log`` from here — a cycle).
+    Mirrors :func:`config.local_dir`; the ``[paths] local_dir`` ini override is applied there, not
+    here (logging is configured before the ini is read)."""
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_STATE_HOME")
+    d = os.path.join(base, "PaintAllocationDashboard") if base \
+        else os.path.join(os.path.expanduser("~"), ".paint_allocation_dashboard")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except OSError:
+        # Fall back to the old behaviour (beside the exe / entry script) if the local dir
+        # can't be created, so logging still has somewhere to go.
+        d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) \
+            else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return d
 
 
 def _prog_name() -> str:
@@ -62,7 +77,7 @@ def _prog_name() -> str:
     return os.path.splitext(base)[0] or "paint_dashboard"
 
 
-_LOG_DIR = _run_dir()
+_LOG_DIR = _log_dir()
 LOG_FILE = os.path.join(_LOG_DIR, _prog_name() + ".log")
 FAULT_FILE = os.path.join(_LOG_DIR, _prog_name() + "_fault.log")
 
@@ -98,7 +113,16 @@ logging.raiseExceptions = False
 # (yellow triangle when the oldest allocated container is >= 4 days old; blank otherwise).
 # 2.2.2: runlist editor per-item delete — selection checkboxes + dual-purpose pane button
 # ("Delete (N)" for selected, else "Clear"); new POST /runlist/delete.
-__version__ = "2.2.2"
+# 2.2.3: fixed the runlist "wiped on data pull" bug — the planner-local draft (and logs) now live
+# in a machine-local, NON-SYNCED folder (config.local_dir / %LOCALAPPDATA%) instead of the shared
+# OneDrive run dir, so concurrent instances on other machines no longer overwrite each other via
+# OneDrive sync (one-time migration seeds the local draft from the old draft/live). Plus a
+# visual-only "ran" checkbox on the PC/EC floor pages (per-browser localStorage; dim+strikethrough).
+# 2.2.4: (a) Pre-Production quick filter — Part_Status from Part Attributes SQL surfaced per release
+# (`partStatus`; Production-wins de-dup for the ~3% of parts with conflicting attribute rows); a
+# tri-state queue chip cycles off → Pre-Production only → hide Pre-Production, persisted in views.
+# (b) "Kick" button — force-take the writer lock from a foreign owner (POST /runlist/kick → lock.seize).
+__version__ = "2.2.4"
 
 # Shared logger name, matching the original single-file module.
 log = logging.getLogger("paint_dashboard")

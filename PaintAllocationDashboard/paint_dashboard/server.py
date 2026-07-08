@@ -15,6 +15,7 @@ Runlist authoring (planner-side; design Part 2):
 * ``POST /runlist/push``       — append selected containers to the draft (``{target, items}``).
 * ``POST /runlist/delete``     — delete selected run-items from a draft list (``{target, ids}``).
 * ``POST /runlist/publish``    — publish the draft to the shared live file (needs the lock).
+* ``POST /runlist/kick``       — force-take the writer lock from another planner (unconditional).
 """
 
 from __future__ import annotations
@@ -268,6 +269,16 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/runlist/publish":
             res = push.publish(push.load_draft())
             self._json(res, 200 if res.get("ok") else 409)
+        elif u.path == "/runlist/kick":
+            # Force-take the writer lock from another planner ("Kick" button). Unconditional
+            # last-writer-wins seize, then keep it alive with our heartbeat so we hold it.
+            prev = lock.read_owner()
+            lock.seize()
+            lock.start_heartbeat()
+            log.info("Writer lock kicked: taken from %s/%s by us",
+                     (prev or {}).get("machine"), (prev or {}).get("user"))
+            self._json({"ok": lock.own(), "owner": lock.read_owner(), "mine": lock.own(),
+                        "previousOwner": prev})
         elif u.path == "/views":
             body = self._read_json()
             res = views.save_view(body.get("name", ""), body.get("filters", {}), views.current_user())

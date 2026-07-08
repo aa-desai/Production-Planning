@@ -45,6 +45,10 @@ table.ctab{width:100%;border-collapse:collapse;font-size:15px;background:var(--p
 /* Minimal leave animation when a container drops off the runlist (was run). */
 .ctab tr{transition:opacity .32s ease,transform .32s ease,background-color .32s ease}
 .ctab tr.removing{opacity:0;transform:translateX(28px);background:#fde8e8}
+/* Visual-only "ran" checkbox the operator ticks to track what they've run (per-browser). */
+.ctab th.chk,.ctab td.chk{width:40px;text-align:center;padding-left:8px;padding-right:8px}
+.ctab input.ranbox{width:20px;height:20px;cursor:pointer;accent-color:var(--navy);margin:0;vertical-align:middle}
+.ctab tr.ran td:not(.chk){opacity:.42;text-decoration:line-through}
 </style>"""
 
 _COMMON_JS = r"""
@@ -68,9 +72,32 @@ function poll(){fetch('/runlist.json').then(x=>x.json()).then(d=>{
    first?render(d):animateThenRender(d);
    const f=document.getElementById('pub'); if(f&&d.publishedAt){f.classList.add('on');setTimeout(()=>f.classList.remove('on'),1500);}}
 }).catch(()=>{});}
+
+// --- Visual-only "ran" tracking (per-browser; keyed by runItemId so ticks survive polls) ---
+// `RAN_TARGET` ('pc'|'ec') is declared by each page's script. Nothing is sent to the server —
+// the floor pages are read-only; this only helps the operator remember what they've run.
+function ranKey(){return 'runlistRan:'+RAN_TARGET;}
+function ranGet(){try{return new Set(JSON.parse(localStorage.getItem(ranKey())||'[]'));}catch(_){return new Set();}}
+function ranSave(s){try{localStorage.setItem(ranKey(),JSON.stringify([].slice.call(s)));}catch(_){}}
+// Restore checkbox state after a render, and prune stored ids no longer on the list (an item
+// reconciled off the runlist drops its tick, so a reused id can't resurrect an old check).
+function applyRan(){
+ const s=ranGet();const present=new Set();let changed=false;
+ [].slice.call(document.querySelectorAll('#root input.ranbox[data-run-id]')).forEach(b=>{
+   const id=b.dataset.runId;present.add(id);const on=s.has(id);b.checked=on;
+   const tr=b.closest('tr');if(tr)tr.classList.toggle('ran',on);});
+ s.forEach(id=>{if(!present.has(id)){s.delete(id);changed=true;}});
+ if(changed)ranSave(s);
+}
+document.addEventListener('change',function(e){
+ const b=e.target;if(!b||!b.classList||!b.classList.contains('ranbox'))return;
+ const s=ranGet();b.checked?s.add(b.dataset.runId):s.delete(b.dataset.runId);ranSave(s);
+ const tr=b.closest('tr');if(tr)tr.classList.toggle('ran',b.checked);
+});
 """
 
 _PC_JS = r"""
+var RAN_TARGET='pc';
 function collectSerials(d){const s=new Set();(d.groups||[]).forEach(g=>(g.releases||[]).forEach(r=>(r.items||[]).forEach(it=>s.add(String(it.serial)))));return s;}
 function render(d){meta(d);const root=document.getElementById('root');const groups=d.groups||[];
  if(!groups.length){root.innerHTML='<div class="empty">No PC runlist published yet.</div>';return;}
@@ -82,22 +109,25 @@ function render(d){meta(d);const root=document.getElementById('root');const grou
         <div class="rhead"><span class="rpart">${esc(r.part)}</span>
           <span class="rmeta">${esc(r.customer)} &middot; ship ${fmtDate(r.shipDate)}</span>
           <span class="rqty">${r.qty}</span></div>
-        <table class="ctab"><thead><tr><th>Part No</th><th>Serial</th><th>Location</th><th class="num">Qty</th></tr></thead>
-        <tbody>${r.items.map(it=>`<tr data-serial="${esc(it.serial)}"><td class="mono">${esc(it.partNo)}</td><td class="mono">${esc(it.serial)}</td><td>${esc(it.location)}</td><td class="num">${it.allocQty}</td></tr>`).join('')}</tbody></table>
+        <table class="ctab"><thead><tr><th class="chk">Ran</th><th>Part No</th><th>Serial</th><th>Location</th><th class="num">Qty</th></tr></thead>
+        <tbody>${r.items.map(it=>`<tr data-serial="${esc(it.serial)}"><td class="chk"><input type="checkbox" class="ranbox" data-run-id="${esc(it.runItemId)}"></td><td class="mono">${esc(it.partNo)}</td><td class="mono">${esc(it.serial)}</td><td>${esc(it.location)}</td><td class="num">${it.allocQty}</td></tr>`).join('')}</tbody></table>
       </div>`).join('')}
   </section>`).join('');
+ applyRan();
 }
 poll();setInterval(poll,15000);
 """
 
 _EC_JS = r"""
+var RAN_TARGET='ec';
 function collectSerials(d){const s=new Set();(d.items||[]).forEach(it=>s.add(String(it.serial)));return s;}
 function render(d){meta(d);const root=document.getElementById('root');const items=d.items||[];
  if(!items.length){root.innerHTML='<div class="empty">No EC runlist published yet.</div>';return;}
  const total=items.reduce((s,it)=>s+(+it.allocQty||0),0);
  root.innerHTML=`<div class="total">Containers: ${items.length} &middot; Total Qty: ${total}</div>
-  <div class="ectab"><table class="ctab"><thead><tr><th>Part No</th><th>Serial</th><th>Location</th><th class="num">Qty</th></tr></thead>
-  <tbody>${items.map(it=>`<tr data-serial="${esc(it.serial)}"><td class="mono">${esc(it.partNo)}</td><td class="mono">${esc(it.serial)}</td><td>${esc(it.location)}</td><td class="num">${it.allocQty}</td></tr>`).join('')}</tbody></table></div>`;
+  <div class="ectab"><table class="ctab"><thead><tr><th class="chk">Ran</th><th>Part No</th><th>Serial</th><th>Location</th><th class="num">Qty</th></tr></thead>
+  <tbody>${items.map(it=>`<tr data-serial="${esc(it.serial)}"><td class="chk"><input type="checkbox" class="ranbox" data-run-id="${esc(it.runItemId)}"></td><td class="mono">${esc(it.partNo)}</td><td class="mono">${esc(it.serial)}</td><td>${esc(it.location)}</td><td class="num">${it.allocQty}</td></tr>`).join('')}</tbody></table></div>`;
+ applyRan();
 }
 poll();setInterval(poll,15000);
 """

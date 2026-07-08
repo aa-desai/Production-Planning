@@ -128,6 +128,9 @@ def build_queue_payload(result: PipelineResult, idx: Indexes,
         pc = bool(flag_lookup["Powdercoat"].get(part, False))
         colour = flag_lookup["Powder Colour"].get(part, "None")
         badge = paint_badge(ec, pc, colour, idx.swatch_map)
+        # Part_Status (e.g. "Pre-Production") for the quick filter; "" when unknown / older builds.
+        part_status = (str(flag_lookup["Part_Status"].get(part, "") or "")
+                       if "Part_Status" in flag_lookup.columns else "")
 
         releases.append({
             "naturalKey": nk,
@@ -135,6 +138,7 @@ def build_queue_payload(result: PipelineResult, idx: Indexes,
             "releasePlant": str(r.get("Release Plant", "") or ""),
             "customer": cust,
             "part": part,
+            "partStatus": part_status,
             "shipTo": str(r.get("Ship To", "") or ""),
             "shipDate": ship,
             "addDateLo": add_lo,

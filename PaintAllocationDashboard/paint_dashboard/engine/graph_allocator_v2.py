@@ -300,6 +300,14 @@ def build_part_paint_flags(
     ).drop_duplicates("Part Number", keep="first")
     colour_map = dict(zip(attrs["Part Number"], attrs["Powder Colour"]))
 
+    # Part_Status lookup (from Part Attributes SQL; the Manual file lacks the column).
+    # A part can carry several attribute rows with conflicting statuses (~3% do — e.g. a stale
+    # "Pre-Production" record alongside a live "Production" one). Resolve to ONE status by
+    # priority so the Pre-Production quick filter is deterministic: a part actually in
+    # Production is treated as Production (it won't show under "Pre-Production only" nor be
+    # hidden by "No Pre-Production"). Order below = most-authoritative first.
+    status_map = _part_status_map(part_attributes)
+
     all_parts = (
         set(process_routing["Part Number"].dropna())
         | has_own_ec | has_own_pc | sole_ec | sole_pc
@@ -320,10 +328,34 @@ def build_part_paint_flags(
                 "Ecoat": ecoat,
                 "Powdercoat": powdercoat,
                 "Powder Colour": colour,
+                "Part_Status": status_map.get(part, ""),
             }
         )
 
-    return pd.DataFrame(rows, columns=["Part Number", "Ecoat", "Powdercoat", "Powder Colour"])
+    return pd.DataFrame(
+        rows, columns=["Part Number", "Ecoat", "Powdercoat", "Powder Colour", "Part_Status"]
+    )
+
+
+# Status priority for de-duping conflicting Part Attributes rows (lower rank wins). Production
+# dominates Pre-Production so a part that is in production is never treated as pre-production.
+_STATUS_PRIORITY = {
+    "Production": 0, "Pre-Production": 1, "Engineering Review": 2,
+    "Review": 3, "Quote": 4, "Inactive": 5, "Obsolete": 6,
+}
+
+
+def _part_status_map(part_attributes: pd.DataFrame) -> dict:
+    """``Part Number -> resolved Part_Status`` (one status per part, priority-deduped)."""
+    if "Part_Status" not in part_attributes.columns:
+        return {}
+    st = part_attributes[["Part Number", "Part_Status"]].dropna().copy()
+    st["Part Number"] = st["Part Number"].astype(str).str.strip()
+    st["Part_Status"] = st["Part_Status"].astype(str).str.strip()
+    st = st[(st["Part Number"] != "") & (st["Part_Status"] != "")]
+    st["_rank"] = st["Part_Status"].map(_STATUS_PRIORITY).fillna(99)
+    st = st.sort_values(["Part Number", "_rank"]).drop_duplicates("Part Number", keep="first")
+    return dict(zip(st["Part Number"], st["Part_Status"]))
 
 
 # ---------------------------------------------------------------------------

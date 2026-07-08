@@ -219,6 +219,16 @@ An empty section imposes no constraint; the two sections combine with each other
 other filter by **AND**. (Replaces the former "OR" / Hide-all / Show-any groups; old saved views
 that stored those sets simply drop them on load.)
 
+**Pre-Production quick filter (V2.2.4).** A single tri-state chip (`#preProdChip`, state `preProd`
+`0 | 1 | -1`) cycles **off → Pre-Production only → No Pre-Production → off**, filtering on each
+release's `partStatus`. The status comes from **`Part_Status` in Part Attributes SQL** (the Manual
+attributes file lacks the column), surfaced per part in `build_part_paint_flags` and per release in
+the payload. ~3% of parts carry conflicting attribute rows (e.g. a stale *Pre-Production* alongside
+a live *Production*); these are resolved to **one** status by priority (`_STATUS_PRIORITY` in
+`graph_allocator_v2` — **Production wins over Pre-Production**), so a part that is actually in
+production is never treated as pre-production. Persisted in saved/shared views (`preProd`); cleared
+by the Clear button. AND-combines with every other filter.
+
 ### 6b. Overdue release detection + Volvo churn snapshots (V2.2.0)
 Lives **entirely in the dashboard layer** (`paint_dashboard/overdue.py`), post-processing a copy
 of `result.releases_with_id`. **The vendored engine is never touched**, and the whole step is
@@ -274,8 +284,16 @@ flags" and the snapshot/churn sub-step is independently guarded — it can never
 
 ### 7. Config, snapshot, watcher, distribution
 - **Config** `paint_allocation_dashboard.ini` (optional; zero-config otherwise). Keys:
-  `[paths] project_root`, `[server] host`/`port` (port 0 = auto), `[refresh] auto_update`.
-  Search: `--config` → run dir → one-up → cwd. All paths relative (OneDrive-portable).
+  `[paths] project_root`, `[paths] local_dir`, `[server] host`/`port` (port 0 = auto),
+  `[refresh] auto_update`, `[shared] dir`. Search: `--config` → run dir → one-up → cwd. All paths
+  relative (OneDrive-portable).
+- **`config.local_dir()` — machine-local, NON-SYNCED store** (default
+  `%LOCALAPPDATA%\PaintAllocationDashboard`, else `~/.paint_allocation_dashboard`; override
+  `[paths] local_dir`). Holds this planner's working files that must **not** be shared across
+  machines: the runlist draft (§10) and the logs. Distinct from `run_dir()` (beside the exe/config,
+  often OneDrive-synced) and `shared_dir()` (`[shared] dir`; the deliberately-shared snapshot pool /
+  live runlist / lock). Putting per-machine files on a synced path caused concurrent instances to
+  clobber each other (runlist wiped on a data pull; log/draft conflict copies) — fixed v2.2.3.
 - **Snapshot cache (V2: shared pool).** On each successful build, write
   `Dashboard Snapshot - <appVersion> - <ComputerID> - <YYYY-MM-DD_HHMMSS>.json` (time = the
   pipeline-run init time; `ComputerID` = `platform.node()`) to a **shared snapshot folder**,
@@ -344,7 +362,15 @@ queued for — drives reconciliation), `source` (`manual` / `auto-ec-deficit`), 
 - **EC:** ordered `items[]`.
 
 **Files:**
-- `runlist_draft.json` — planner-local autosave (survives restart). Where edits land.
+- `runlist_draft.json` — planner-local autosave (survives restart). Where edits land. **Lives in a
+  machine-local, NON-SYNCED folder (`config.local_dir()`, default `%LOCALAPPDATA%\PaintAllocationDashboard`),
+  NOT the run dir.** The run/shared dir is typically a OneDrive library synced across machines; a draft
+  there is the *same synced file* on every machine, so concurrent instances overwrite each other and
+  OneDrive spawns `runlist_draft-<MACHINE>-N.json` conflict copies — the cause of the runlist being
+  **wiped on a data pull** (fixed v2.2.3). `store._ensure_local_draft()` does a one-time migration:
+  first read after upgrade seeds the local draft from the old run-dir draft (if it still has items),
+  else the shared live runlist, else empty. The draft has no lock (only publish/live does); keeping it
+  local is what makes the unguarded read/reconcile/write safe under the "one planner at a time" model.
 - `runlist_live.json` — shared, published; what the floor reads. The contract.
 - `run_history.json` — local audit of reconciled/removed items (nothing vanishes silently).
 - `runlist_owner.lock` — shared lock/heartbeat (§14).
@@ -424,6 +450,14 @@ Only for branches that have **both** an EC and a PC op (EC then PC). When PC is 
   really gone), then **auto-takes ownership** (atomic write) and notifies. A live owner means
   the second instance stays **read-only** (can author a draft, cannot publish) until takeover.
 - Only the lock owner may write `runlist_live.json`.
+- **Manual takeover — "Kick" button (V2.2.4):** the event-driven auto-takeover only fires after the
+  missed-heartbeat window (≈15 min), which needs the current owner to be *asleep/closed* (a merely
+  screen-locked but awake machine keeps beating and holds the lock). The **Kick** button in the
+  runbar (shown only when a *foreign* planner owns the lock) does an **unconditional
+  last-writer-wins seize** (`POST /runlist/kick` → `lock.seize` + start our heartbeat), so a planner
+  can take over immediately without waiting. Confirm-gated; the kicked owner reverts to read-only
+  until they retake it. (We deliberately did **not** shorten the auto-expiry window or add OS-level
+  session-lock detection — the Kick button covers the "someone walked away" case directly.)
 
 ### 15. Reconciliation on refresh + 5-min heartbeat (auto-remove what was run)
 Runs inside `AppState.refresh()` (`_reconcile_runlist`), **after** the payload swap; if we
@@ -494,6 +528,12 @@ ERP pull. Per `RunItem` (keyed by `serial`):
   because the planner (or the 5-min heartbeat, §15) republishes the reconciled list. Rows that
   vanished since the last render **fade/slide out** (`animateThenRender` diffs `data-serial`
   before swapping the table). Read-only.
+- **"Ran" checkbox (visual only, v2.2.3):** a leading checkbox on every container row so the
+  operator can track what they've run. Purely client-side — the floor pages send nothing to the
+  server. Checked state is **per-browser** in `localStorage` (key `runlistRan:<pc|ec>` = set of
+  ticked `runItemId`s), so ticks survive the 15 s poll re-render and page reloads. A ticked row is
+  dimmed + struck through (`.ran`). On each render `applyRan()` restores checks and **prunes**
+  stored ids to those still on the list, so a container reconciled off the runlist drops its tick.
 
 ### 18a. Toast notifications
 - Transient overlay messages (`#toasts` top-right, `toast(msg,type)`; types `ok`/`warn`/`err`) that

@@ -33,9 +33,14 @@ dist/
 *.xlsx
 
 # ---- Runtime / derived files ----
+# *.log plus rotated backups (foo.log.1) and OneDrive log conflict copies (foo.log-MACHINE.1)
 *.log
+*.log.*
+*.log-*
 *_snapshot*.json
+# runlist draft: the live file plus OneDrive conflict copies (runlist_draft-MACHINE-N.json)
 runlist_draft.json
+runlist_draft-*.json
 runlist_live.json
 Runlists/
 Snapshots/
@@ -46,6 +51,11 @@ Views/
 # source package's Python files; the runtime `Runlists/` output folder stays ignored.
 !**/paint_dashboard/runlists/
 !**/paint_dashboard/runlists/*.py
+
+# ---- Plex session credentials — NEVER commit (live cookie, ~4-8h life) ----
+plex-session.json
+**/plex-session.json
+/Plex Access/trial-data/
 
 # ---- OS / OneDrive / editor cruft ----
 desktop.ini

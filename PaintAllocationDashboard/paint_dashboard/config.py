@@ -10,6 +10,7 @@ swatch CSV, the snapshot cache) and, when frozen, the ``.exe`` itself.
 from __future__ import annotations
 
 import configparser as _cp
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,27 @@ def run_dir() -> Path:
     # This module lives at ``PaintAllocationDashboard\paint_dashboard\config.py``; the
     # run directory is two levels up (``PaintAllocationDashboard\``).
     return Path(__file__).resolve().parent.parent
+
+
+def local_dir() -> Path:
+    """A **machine-local, non-synced** folder for per-planner working files (the runlist draft).
+
+    Critical for correctness: ``run_dir()`` / ``shared_dir()`` frequently point at a **OneDrive**
+    library that syncs to every coworker's machine. Storing the "planner-local" draft there means
+    every machine writes the *same* synced file — concurrent instances overwrite each other and
+    OneDrive spawns conflict copies (``runlist_draft-<MACHINE>-N.json``), which manifested as the
+    runlist getting **wiped on a data pull**. Keeping the draft here (outside any synced folder)
+    gives each machine its own draft; only the published live runlist + lock stay shared.
+
+    Override with ``[paths] local_dir`` in the ini; default ``%LOCALAPPDATA%\\PaintAllocationDashboard``
+    on Windows, else ``~/.paint_allocation_dashboard``.
+    """
+    d = CONFIG.get("local_dir")
+    if d is None:
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_STATE_HOME")
+        d = (Path(base) / "PaintAllocationDashboard") if base else (Path.home() / ".paint_allocation_dashboard")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def load_config() -> dict:
@@ -68,6 +90,10 @@ def load_config() -> dict:
             pr = cp.get("paths", "project_root").strip()
             if pr:
                 out["project_root"] = (base / pr).resolve()
+        if cp.has_option("paths", "local_dir"):
+            ld = cp.get("paths", "local_dir").strip()
+            if ld:
+                out["local_dir"] = (base / ld).resolve()
         if cp.has_option("server", "host"):
             out["host"] = cp.get("server", "host").strip() or "127.0.0.1"
         if cp.has_option("server", "port"):

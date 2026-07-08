@@ -186,6 +186,9 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
 .btn.rpush:hover{filter:brightness(1.06)}
 .btn.rpub{background:var(--c-past);color:#fff;border-color:var(--c-past);font-weight:700}
 .btn.rpub:disabled{opacity:.5;cursor:default}
+.btn.rkick{background:#c0392b;color:#fff;border-color:#a93226;font-weight:700}
+.btn.rkick:hover{filter:brightness(1.06)}
+.btn.rkick .bspin{border-color:rgba(255,255,255,.45);border-top-color:#fff}
 .runbar .rlock{font-size:11px;color:var(--faint);font-family:var(--mono)}
 .ecnote{color:#9a6b00;background:#ffedcc;border:1px solid #f0d18a;border-radius:6px;padding:2px 8px;font-size:11.5px;font-weight:700}
 /* --- Runlist reorder editor --- */
@@ -318,6 +321,7 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
           <span class="chip" id="pcChip" data-p="PC">PC</span>
           <span class="chip" id="colourBtn">Colour &#9662;</span>
           <span class="chip" id="invP10Chip" title="Hide P6 releases that have no inventory anywhere in their routing at P10">Inventory at P10</span>
+          <span class="chip" id="preProdChip" title="Cycle: off → Pre-Production parts only → hide Pre-Production parts → off">Pre-Production</span>
           <span class="hidegrp" title="Any: matches if the release has SOME of every chip you set. Click = has some of this bucket; click again = has none; again = off.">
             <span class="hlbl">Any</span>
             <span class="chip cond" data-grp="any" data-k="pastPaint"><i style="background:var(--c-past)"></i><span class="cl">Past Paint</span></span>
@@ -370,6 +374,7 @@ input.search{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font
       <span id="draftCount" class="rcount" title="Draft runlist (not yet published)">draft: pc 0 &middot; ec 0</span>
       <button class="btn rpub" id="publishBtn" title="Publish the draft to the floor runlists">Publish</button>
       <span id="lockInfo" class="rlock"></span>
+      <button class="btn rkick" id="kickBtn" style="display:none" title="Take over the writer lock from the current planner">Kick</button>
       <span id="ecNotice" class="ecnote" style="display:none"></span>
     </div>
     <div class="detailhead" id="detailhead"><span class="meta">Select a release&hellip;</span></div>
@@ -406,6 +411,7 @@ let condAny = {};                        // "Any" section: bucket -> 1 (has some
 let condAll = {};                        // "All" section: bucket -> 1 (entire bar IS) | -1 (entire bar IS NOT); whole-bar, all set chips AND
 let ecState = 0, pcState = 0;            // 0=off, 1=require, -1=exclude
 let invP10 = false;                      // hide P6 releases with no P10 inventory in their routing
+let preProd = 0;                         // Part_Status filter: 0=off, 1=Pre-Production only, -1=exclude Pre-Production
 let DATES = [], dLo = 0, dHi = 0;        // ship-date range slider (indices into DATES)
 const $ = s => document.querySelector(s);
 
@@ -483,6 +489,8 @@ function renderQueue(){
  PAYLOAD.releases.forEach(r=>{
    if(custFilter.size && !custFilter.has(r.customer))return;
    if(invP10 && r.releasePlant==='P6' && !r.p10Inventory)return;
+   if(preProd===1 && r.partStatus!=='Pre-Production')return;
+   if(preProd===-1 && r.partStatus==='Pre-Production')return;
    if(DATES.length && r.shipDate && (r.shipDate < DATES[dLo] || r.shipDate > DATES[dHi]))return;
    const pt = r.paintBadge ? r.paintBadge.type : '';
    const isEC = pt==='EC'||pt==='EC+PC', isPC = pt==='PC'||pt==='EC+PC';
@@ -561,6 +569,11 @@ $('#ecChip').onclick=()=>{ecState=(ecState===0?1:ecState===1?-1:0);paintChip('ec
 $('#pcChip').onclick=()=>{pcState=(pcState===0?1:pcState===1?-1:0);paintChip('pcChip',pcState,'PC');updateColourBtn();renderQueue();};
 // "Inventory at P10": when on, hides P6 releases whose entire routing has no P10 inventory.
 $('#invP10Chip').onclick=()=>{invP10=!invP10;$('#invP10Chip').classList.toggle('on',invP10);renderQueue();};
+// Pre-Production quick filter — tri-state: off -> only (.on) -> exclude (.neg) -> off.
+function paintPreProdChip(){const c=$('#preProdChip');if(!c)return;
+  c.classList.toggle('on',preProd===1);c.classList.toggle('neg',preProd===-1);
+  c.textContent=preProd===1?'Pre-Production only':preProd===-1?'No Pre-Production':'Pre-Production';}
+$('#preProdChip').onclick=()=>{preProd=(preProd===0?1:preProd===1?-1:0);paintPreProdChip();renderQueue();};
 
 // Ship-date range slider (defaults to the full range = all releases visible).
 function initDateSlider(){
@@ -775,8 +788,18 @@ $('#publishBtn').onclick=e=>btnRun(e.currentTarget,'Publishing',()=>
 function updateRunbar(){
  updateSelCount();
  fetch('/runlist/draft.json').then(x=>x.json()).then(d=>{$('#draftCount').textContent='draft: pc '+((d.pc||[]).length)+' · ec '+((d.ec||[]).length);}).catch(()=>{});
- fetch('/runlist/lock').then(x=>x.json()).then(d=>{const o=d.owner;const txt=o?('lock: '+(d.mine?'you':((o.user||'?')+'@'+(o.machine||'?')))):'';$('#lockInfo').textContent=txt;}).catch(()=>{});
+ fetch('/runlist/lock').then(x=>x.json()).then(d=>{const o=d.owner;
+   window._lockOwner=(o&&!d.mine)?o:null;   // a *foreign* owner we could kick (null = free / ours)
+   const txt=o?('lock: '+(d.mine?'you':((o.user||'?')+'@'+(o.machine||'?')))):'';$('#lockInfo').textContent=txt;
+   const kb=$('#kickBtn');if(kb)kb.style.display=window._lockOwner?'inline-flex':'none';}).catch(()=>{});
 }
+// Kick: seize the writer lock from a foreign owner (they can no longer publish until they retake it).
+$('#kickBtn').onclick=e=>{const o=window._lockOwner;
+ const who=o?((o.user||'another planner')+(o.machine?(' @'+o.machine):'')):'the current owner';
+ if(!confirm('Take over the runlist writer lock from '+who+'?\n\nThey will no longer be able to publish until they take it back.'))return;
+ btnRun(e.currentTarget,'Kicking',()=>fetch('/runlist/kick',{method:'POST'}).then(x=>x.json()).then(res=>{
+   if(!res.ok)throw new Error('failed');updateRunbar();}),
+   {done:'Taken',onError:()=>alert('Could not take over the lock.')});};
 
 // ---- Runlist reorder editor: grouped drag-and-drop + publish + auto-publish ----
 // EDIT holds the working order for each list (array of run-item dicts). Group headers
@@ -1050,17 +1073,18 @@ setInterval(()=>{if(window._rel)updateRunbar();},20000);
 // --- Filter presets: save / apply / delete named filter sets (local only). ---
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function captureFilters(){return {cust:[...custFilter],ec:ecState,pc:pcState,colour:[...colourFilter],
- invP10:invP10,condAny:Object.assign({},condAny),condAll:Object.assign({},condAll),search:$('#search').value,
+ invP10:invP10,preProd:preProd,condAny:Object.assign({},condAny),condAll:Object.assign({},condAll),search:$('#search').value,
  dateLo:DATES[dLo]||null,dateHi:DATES[dHi]||null};}
 function applyFilters(f){
  f=f||{};
  custFilter=new Set(f.cust||[]);ecState=f.ec||0;pcState=f.pc||0;
- colourFilter=new Set(f.colour||[]);invP10=!!f.invP10;
+ colourFilter=new Set(f.colour||[]);invP10=!!f.invP10;preProd=f.preProd||0;
  // Back-compat: older saved views used hideAll/showAny sets; those buckets no longer apply — drop silently.
  condAny=Object.assign({},f.condAny||{});condAll=Object.assign({},f.condAll||{});
  $('#search').value=f.search||'';
  paintChip('ecChip',ecState,'EC');paintChip('pcChip',pcState,'PC');updateColourBtn();
  $('#invP10Chip').classList.toggle('on',invP10);
+ paintPreProdChip();
  paintAllCondChips();
  if(DATES.length){
    let lo=0,hi=DATES.length-1;

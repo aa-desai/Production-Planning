@@ -9,7 +9,43 @@ handoff: root [README.md](../README.md) (absorbed `graph_allocator_V2_README.md`
 ---
 
 ## Status at a glance
-- **V2.2.2 — current (2026-06-24): Runlist editor per-item delete.** Each editor row now has a selection checkbox
+- **V2.2.4 — current (2026-07-06): Pre-Production quick filter + Kick lock button.**
+  **(1) Pre-Production filter.** `Part_Status` (from **Part Attributes SQL**; the Manual file lacks
+  the column) is now surfaced per part in `build_part_paint_flags` (new `Part_Status` column +
+  `_part_status_map` / `_STATUS_PRIORITY`) and per release in `build_queue_payload` (`partStatus`).
+  ~3% of parts have conflicting attribute rows (29 are both Pre-Production + Production); resolved to
+  one status by priority — **Production wins** over Pre-Production. UI: a tri-state queue chip
+  `#preProdChip` (`preProd` `0|1|-1`) cycles **off → Pre-Production only → No Pre-Production → off**,
+  AND-combined with existing filters, persisted in saved/shared views, reset by Clear.
+  **(2) Kick button.** New `POST /runlist/kick` (`lock.seize` + start heartbeat = unconditional
+  last-writer-wins takeover). Runbar `#kickBtn` (red) shows only when a *foreign* planner owns the
+  lock; confirm-gated. Rationale for lock/sleep (user asked): the existing heartbeat already
+  auto-expires a **slept/closed** owner after ~15 min, but a screen-locked-but-awake machine keeps
+  beating — so per the user we did **not** shorten auto-expiry or add OS session hooks; the Kick
+  button covers immediate manual takeover. `__version__` → `2.2.4`. See [DESIGN.md](DESIGN.md) §6a
+  (Pre-Production filter), §14 (Kick). **Exes NOT rebuilt.**
+- **V2.2.3 — (2026-07-06): Fixed runlist "wiped on data pull" + floor "ran" checkbox.**
+  **Root cause (NOT the reconcile logic):** the whole `PaintAllocationDashboard\` folder is a shared
+  OneDrive library and `[shared] dir` is blank, so the "planner-local" `runlist_draft.json` (and the
+  logs) resolved to the **same synced file on every machine**. Multiple planner instances (≥4
+  machines: `PW0LXDNX`, `PF4TLZ0E`, `cdeltetto`, `sgroff`/`PW08AAPK`) read/write the draft on every
+  refresh with **no lock** (only publish/live is lock-guarded); a new ERP pull fires every machine's
+  watcher at once, and whichever instance held a stale/empty draft won the OneDrive sync race and
+  overwrote the list. Evidence: dozens of `runlist_draft-<MACHINE>-N.json` OneDrive conflict copies
+  (one literally `{"pc":[],"ec":[]}`) and repeated `WinError 32 / Access denied` on the `.tmp→.json`
+  rename. Reconcile logs showed it *keeping* most items (`kept:16`), confirming reconcile wasn't the
+  culprit — **reconcile logic left unchanged.** **Fix:** new `config.local_dir()` (machine-local,
+  non-synced; default `%LOCALAPPDATA%\PaintAllocationDashboard`, override `[paths] local_dir`).
+  `store.draft_path()` now writes there; `store._ensure_local_draft()` does a one-time migration
+  (first read seeds the local draft from the old run-dir draft if it has items, else the shared live
+  runlist). Logs moved the same way via an inlined resolver in `__init__.py` (`_log_dir()`; no
+  `config` import — avoids the `config→log` cycle). **Also:** visual-only **"Ran" checkbox** on the
+  PC/EC floor pages (`ui.py`) — per-browser `localStorage` (`runlistRan:<pc|ec>` = set of ticked
+  `runItemId`s) so ticks survive the 15 s poll + reloads; ticked rows dim+strikethrough (`.ran`);
+  `applyRan()` restores + prunes stored ids to those still listed. `__version__` → `2.2.3`. See
+  [DESIGN.md](DESIGN.md) §6a (config/local_dir), §10 (draft store + migration), §17 (ran checkbox).
+  **Exes NOT rebuilt.**
+- **V2.2.2 — (2026-06-24): Runlist editor per-item delete.** Each editor row now has a selection checkbox
   (`.edsel`; client `edSel` set keyed by `runItemId`). The pane button is dual-purpose — **"Delete (N)"** removes
   the selected items via new `POST /runlist/delete` (`push.remove_items(target, ids)`); with nothing selected it
   stays **"Clear"** (empties the pane, confirm-gated). Selections pruned on reload/reconcile. Backend: `push.remove_items`
