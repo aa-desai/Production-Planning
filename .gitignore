@@ -52,10 +52,11 @@ Views/
 !**/paint_dashboard/runlists/
 !**/paint_dashboard/runlists/*.py
 
-# ---- Plex session credentials — NEVER commit (live cookie, ~4-8h life) ----
-plex-session.json
-**/plex-session.json
-/Plex Access/trial-data/
+# ---- Plex auto-pull system — entirely self-contained + gitignored ----
+# The data-pull daemon, its source, exe, sessions, logs, config, Edge profiles.
+/Plex Access/
+plex-session*.json
+**/plex-session*.json
 
 # ---- OS / OneDrive / editor cruft ----
 desktop.ini
